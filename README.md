@@ -8,13 +8,13 @@
   - 新增卡片綁定介面
 ## 功能簡介
 - 圖片審核功能
-  - 建立 上傳區 與 後台審查 頻道
-  - 使用「!RA 上傳圖片」 並附加圖片檔
-  - 機器人會自動傳送訊息至頻道內
+  - ### 建立 上傳區 與 後台審查 頻道
+  - ### 使用「!RA 上傳圖片」 並附加圖片檔
+  - ### 機器人會自動傳送訊息至頻道內
   ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/001.png)
-  - 後台審查會出現圖片與使用者名稱及按鈕
+  - ### 後台審查會出現圖片與使用者名稱及按鈕
   ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/002.png)
-  - 選擇後會由機器人傳送訊息給使用者
+  - ### 選擇後會由機器人傳送訊息給使用者
   ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/003.png)
   ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/004.png)
 ## 未來規劃
