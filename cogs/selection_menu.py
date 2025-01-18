@@ -39,11 +39,11 @@ class SelectionMenuSelect(discord.ui.Select):
     def __init__(self, cog: CardBindingCog):
         self.cog = cog
         options = [
+            discord.SelectOption(label="上傳圖片", description="上傳圖片進行審查", value="upload_pic"),
             discord.SelectOption(label="綁定卡號", description="綁定新的卡號", value="bind"),
             discord.SelectOption(label="修改卡號", description="修改已綁定的卡號", value="modify"),
             discord.SelectOption(label="查詢卡號", description="查看目前已綁定的卡號", value="query"),
             discord.SelectOption(label="刪除卡號", description="刪除已綁定的卡號", value="delete"),
-            discord.SelectOption(label="上傳圖片", description="上傳圖片進行審查", value="upload_pic"),
         ]
         super().__init__(placeholder="選擇功能", min_values=1, max_values=1, options=options)
 
@@ -62,7 +62,7 @@ class SelectionMenuSelect(discord.ui.Select):
             success, message = await self.cog.delete_card(interaction.user)
             await interaction.response.send_message(message, ephemeral=True)
         elif choice == "upload_pic":
-            await interaction.response.send_message("請使用 !RA 上傳圖片 指令附加圖片檔案。", ephemeral=True)
+            await interaction.response.send_message("請在私訊輸入 !RA 上傳圖片 並附加圖片檔案。", ephemeral=True)
 
 class SelectionMenuView(View):
     def __init__(self, cog: CardBindingCog):
