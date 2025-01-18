@@ -1,3 +1,4 @@
+# cogs/card_binding.py
 import discord
 from discord.ext import commands
 from typing import Dict
@@ -38,5 +39,18 @@ class CardBindingCog(commands.Cog):
         else:
             return False, "你尚未綁定卡號。"
 
-async def setup(bot: commands.Bot, user_cards: Dict[int, str]):
+    @commands.command(name="卡片設定")
+    async def card_setting(self, ctx: commands.Context):
+        from cogs.selection_menu import SelectionMenuView  # 避免循環導入
+        view = SelectionMenuView(self)
+        await ctx.send("請選擇所需功能：", view=view)
+
+async def setup(bot: commands.Bot):
+    user_cards = getattr(bot, "user_cards", None)
+    if user_cards is None:
+        print("Error: bot does not have 'user_cards' attribute.")
+        raise AttributeError("Bot object has no attribute 'user_cards'")
+    else:
+        print("bot.user_cards 已找到。")
     await bot.add_cog(CardBindingCog(bot, user_cards))
+    print("CardBindingCog 已成功加載。")
