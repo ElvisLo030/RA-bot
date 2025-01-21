@@ -29,7 +29,7 @@ async def load_cogs():
     await bot.load_extension("cogs.card_binding")
     await bot.load_extension("cogs.selection_menu")
     await bot.load_extension("cogs.image_review")
-
+    await bot.load_extension("cogs.voting")
 # 啟動 Bot
 async def start_bot():
     async with bot:
@@ -99,6 +99,19 @@ def add_image(image: Image):
         "username": "unknown"              # 初始使用者名稱，稍後更新
     })
     return {"message": f"使用者 {image.user_id} 的圖片 {image.filename} 已儲存。"}
+
+# GET /votes
+@app.get("/votes")
+def get_votes():
+    if not hasattr(bot, "votes_history"):
+        bot.votes_history = []
+    return bot.votes_history
+
+# POST /votes
+class Vote(BaseModel):
+    title: str
+    up: int = 0
+    down: int = 0
 
 # 同時執行 Bot 與 API
 if __name__ == "__main__":

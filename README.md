@@ -7,23 +7,17 @@
 - 1140118
   - 新增卡片綁定介面
 ## 安裝模組
-- `pip install discord.py`
-- `pip install uvicorn`
-- `pip install fastapi`
+- `pip install -r requirements.txt`
 ## TOKEN設定
 - `export DISCORD_TOKEN=discord_token`
 ## 功能簡介
 - [邀請連結](https://discord.com/oauth2/authorize?client_id=746717105206067302)
-- 圖片審核功能
-  - ### 建立 上傳區 與 後台審查 頻道
-  - ### 使用「!RA 上傳圖片」 並附加圖片檔
-  - ### 機器人會自動傳送訊息至頻道內
-  ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/001.png)
-  - ### 後台審查會出現圖片與使用者名稱及按鈕
-  ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/002.png)
-  - ### 選擇後會由機器人傳送訊息給使用者
-  ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/003.png)
-  ![](https://github.com/ElvisLo030/RA-bot/blob/main/photo/004.png)
+- `!RA 功能選單`
+  - 可在此頁面查看所有功能
+- `!RA 圖片上傳`
+  - 輸入指令同時需附加圖片
+- `!RA 設定投票`
+  - 輸入指令同時需空格後加入投票標題
 ## 未來規劃
 - 將系統串入api抓取與儲存資料
 - 新增活動計點系統

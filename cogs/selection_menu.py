@@ -44,6 +44,7 @@ class SelectionMenuSelect(discord.ui.Select):
             discord.SelectOption(label="修改卡號", description="修改已綁定的卡號", value="modify"),
             discord.SelectOption(label="查詢卡號", description="查看目前已綁定的卡號", value="query"),
             discord.SelectOption(label="刪除卡號", description="刪除已綁定的卡號", value="delete"),
+            discord.SelectOption(label="投票功能（beta）", description="簡易投票系統", value="vote"),
         ]
         super().__init__(placeholder="選擇功能", min_values=1, max_values=1, options=options)
 
@@ -63,6 +64,8 @@ class SelectionMenuSelect(discord.ui.Select):
             await interaction.response.send_message(message, ephemeral=True)
         elif choice == "upload_pic":
             await interaction.response.send_message("請在私訊輸入 !RA 上傳圖片 並附加圖片檔案。", ephemeral=True)
+        elif choice == "vote":
+            await interaction.response.send_message("請使用 !RA 設定投票 並附加投票主題。", ephemeral=True)
 
 class SelectionMenuView(View):
     def __init__(self, cog: CardBindingCog):
