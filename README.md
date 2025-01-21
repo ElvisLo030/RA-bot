@@ -6,6 +6,12 @@
   - 新增按鈕審核功能＋自動私訊回覆結果
 - 1140118
   - 新增卡片綁定介面
+## 安裝模組
+- `pip install discord.py`
+- `pip install uvicorn`
+- `pip install uvicorn`
+## TOKEN設定
+- `export DISCORD_TOKEN=discord_token`
 ## 功能簡介
 - [邀請連結](https://discord.com/oauth2/authorize?client_id=746717105206067302)
 - 圖片審核功能
