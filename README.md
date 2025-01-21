@@ -9,7 +9,7 @@
 ## 安裝模組
 - `pip install discord.py`
 - `pip install uvicorn`
-- `pip install uvicorn`
+- `pip install fastapi`
 ## TOKEN設定
 - `export DISCORD_TOKEN=discord_token`
 ## 功能簡介
