@@ -20,8 +20,10 @@ class ReviewView(View):
             if img["filename"] == self.filename:
                 img["status"] = "approved"
                 user = self.bot.get_user(self.user_id)
+                if not user:
+                    user = await self.bot.fetch_user(self.user_id)
                 if user:
-                    await user.send(f"你的圖片 {self.filename} 已通過審核！")
+                    await user.send(f"你的圖片 {self.filename} 已通過審核！")    
                 break
         await interaction.response.send_message(f"圖片 {self.filename} 審核通過！", ephemeral=True)
         await self.update_status(interaction, "已通過")
@@ -33,8 +35,10 @@ class ReviewView(View):
             if img["filename"] == self.filename:
                 img["status"] = "rejected"
                 user = self.bot.get_user(self.user_id)
+                if not user:
+                    user = await self.bot.fetch_user(self.user_id)
                 if user:
-                    await user.send(f"你的圖片 {self.filename} 已被拒絕。")
+                    await user.send(f"你的圖片 {self.filename} 已被拒絕。")    
                 break
         await interaction.response.send_message(f"圖片 {self.filename} 已拒絕！", ephemeral=True)
         await self.update_status(interaction, "已拒絕")
@@ -82,5 +86,6 @@ class ImageReviewCog(commands.Cog):
             )
             view.message = msg
         await ctx.send(f"圖片 {attachment.filename} 已收到，等待管理員審核。")
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(ImageReviewCog(bot))
