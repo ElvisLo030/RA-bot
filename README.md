@@ -14,9 +14,10 @@
 
 ## 安裝模組
 - `pip install -r requirements.txt`
-## DC BOT TOKEN設定
+## DC BOT 設定
 - 在目錄內新增`.env`檔案
-- 在檔案內加入`DISCORD_TOKEN=YOUR_DISCORD_TOKEN`
+- 加入`DISCORD_TOKEN=YOUR_DISCORD_TOKEN`
+- 加入`TARGET_CHANNEL_ID=YOUR_CHANNEL_ID`
 ## 功能簡介
 - [邀請連結](https://discord.com/oauth2/authorize?client_id=746717105206067302)
 - `!RA 功能選單`

@@ -20,7 +20,7 @@ class VotingResultsSelect(Select):
         index = int(self.values[0])
         vote = self.votes[index]
         await interaction.response.send_message(
-            f"投票標題：{vote['title']}\n👍：{vote['up']}\n👎：{vote['down']}",
+            f"投票標題：{vote['title']}\n{vote['up_emoji']}：{vote['up']}\n{vote['down_emoji']}：{vote['down']}",
             ephemeral=True
         )
 
@@ -36,7 +36,7 @@ class VotingCog(commands.Cog):
         await message.add_reaction(up_emoji)
         await message.add_reaction(down_emoji)
         # 紀錄投票
-        self.bot.votes_history.append({"title": title, "message_id": message.id, "up": 0, "down": 0})
+        self.bot.votes_history.append({"title": title, "message_id": message.id, "up": 0, "down": 0, "up_emoji": up_emoji, "down_emoji": down_emoji})
 
     @commands.command(name="投票紀錄")
     async def vote_history(self, ctx: commands.Context):
@@ -50,9 +50,9 @@ class VotingCog(commands.Cog):
     async def on_reaction_add(self, reaction, user):
         for vote in self.bot.votes_history:
             if vote["message_id"] == reaction.message.id:
-                if str(reaction.emoji) == "👍":
+                if str(reaction.emoji) == vote["up_emoji"]:
                     vote["up"] += 1
-                elif str(reaction.emoji) == "👎":
+                elif str(reaction.emoji) == vote["down_emoji"]:
                     vote["down"] += 1
 
 async def setup(bot: commands.Bot):

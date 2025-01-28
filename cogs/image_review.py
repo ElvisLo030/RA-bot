@@ -1,9 +1,13 @@
 import discord
+import os
 from discord.ext import commands
 from discord.ui import Button, View
 from typing import List, Dict
+from dotenv import load_dotenv
 
-TARGET_CHANNEL_ID = 1328558488355340348
+load_dotenv()
+
+TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID"))
 
 class ReviewView(View):
     def __init__(self, bot: commands.Bot, user_id: int, filename: str):

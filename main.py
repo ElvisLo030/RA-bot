@@ -5,6 +5,9 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 設定 Discord Intents
 intents = discord.Intents.default()
