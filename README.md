@@ -1,7 +1,6 @@
 <h1 align="center">RA DCbot</h1>
 
-<h2 align="center">開發進度</h2>
-  
+## 開發進度
 - 1140114
 基礎照片審核功能
 - 1140115
@@ -11,6 +10,8 @@
 - 1140121
 使用`fastapi`進行簡單的api測試
 新增簡易投票系統
+- 1140128
+將審核頻道ID導入`.env`
 
 ## 安裝模組
 - `pip install -r requirements.txt`
@@ -18,6 +19,7 @@
 - 在目錄內新增`.env`檔案
 - 加入`DISCORD_TOKEN=YOUR_DISCORD_TOKEN`
 - 加入`TARGET_CHANNEL_ID=YOUR_CHANNEL_ID`
+  - TARGET_CHANNEL_ID ＝ 審核頻道ID
 ## 功能簡介
 - [邀請連結](https://discord.com/oauth2/authorize?client_id=746717105206067302)
 - `!RA 功能選單`
