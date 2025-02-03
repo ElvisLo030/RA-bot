@@ -2,126 +2,254 @@ import discord
 from discord.ext import commands
 import os
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
-# 設定 Discord Intents
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
 intents.message_content = True
 
-# 建立 Bot 實例
 bot = commands.Bot(command_prefix="!RA ", intents=intents)
 
-# 定義共享資料
-bot.user_cards = {}   # 儲存使用者卡號
-bot.user_images = {}  # 儲存使用者圖片審查資訊
+# ------------------------------
+# In-memory 資料
+# ------------------------------
+bot.user_images = {}       # 圖片審核資訊
+bot.events = {}            # 活動列表 { event_id: {...} }
+bot.tasks = {}             # 任務列表 { task_id: {...} }
+gamers = {}                # 玩家資料 (若需要, 也可直接 bot.gamers = {})
+event_counter = 1
+task_counter = 1
 
-# 取得 Discord Token
+# ------------------------------
+# 加點數函式
+# ------------------------------
+def add_points_internal(gamer_id: int, points: int) -> str:
+    """
+    範例: 將 points 加到 gamers[gamer_id]['history_event_pts_list'].
+    若 gamer 不存在就先初始化
+    """
+    if gamer_id not in gamers:
+        gamers[gamer_id] = {
+            "gamer_id": gamer_id,
+            "gamer_dcid": f"UnknownUser{gamer_id}",
+            "gamer_card_number": None,
+            "gamer_is_blocked": False,
+            "gamer_bind_gamepass": None,
+            "history_event_list": [],
+            "history_event_pts_list": [],
+            "history_task_list": []
+        }
+    gamers[gamer_id]["history_event_pts_list"].append(points)
+    return f"已為玩家 {gamer_id} 新增 {points} 點數"
+
+# ------------------------------
+# FastAPI
+# ------------------------------
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     raise ValueError("DISCORD_TOKEN 環境變數未設置")
 
-# 載入 Cogs
 async def load_cogs():
     await bot.load_extension("cogs.card_binding")
     await bot.load_extension("cogs.selection_menu")
     await bot.load_extension("cogs.image_review")
-    await bot.load_extension("cogs.voting")
-# 啟動 Bot
+    await bot.load_extension("cogs.event_management")
+    await bot.load_extension("cogs.admin_management")
+
 async def start_bot():
     async with bot:
         await load_cogs()
         await bot.start(TOKEN)
 
-# 建立 FastAPI
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.bot = bot
+    yield
 
-# 定義資料模型
-class Card(BaseModel):
-    user_id: int
-    card_number: str
+app = FastAPI(lifespan=lifespan)
 
-class Image(BaseModel):
+# ------------------------------
+# Pydantic Models
+# ------------------------------
+class ImageData(BaseModel):
     user_id: int
     filename: str
     url: str
 
-# 根路由
+class EventData(BaseModel):
+    event_name: str
+    event_description: str
+    event_start_date: str
+    event_end_date: str
+
+class TaskData(BaseModel):
+    task_name: str
+    task_description: str
+    task_points: int
+    event_id: int
+
+class GamerData(BaseModel):
+    gamer_dcid: str
+    gamer_card_number: str = None
+    gamer_is_blocked: bool = False
+    gamer_bind_gamepass: str = None
+
 @app.get("/")
 def read_root():
     return {"message": "歡迎使用 RA 機器人 API"}
 
-# GET /cards
-@app.get("/cards")
-def get_cards():
-    return bot.user_cards
-
-# POST /cards
-@app.post("/cards")
-def add_card(card: Card):
-    import re
-    card_pattern = re.compile(r'^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{8}$')
-    if not card_pattern.match(card.card_number):
-        raise HTTPException(status_code=400, detail="卡號格式錯誤！需包含 8 位英數字，且至少包含 1 英文字母與 1 數字。")
-    bot.user_cards[card.user_id] = card.card_number
-    return {"message": f"使用者 {card.user_id} 的卡號 {card.card_number} 已儲存。"}
-
-# GET /images
+# ------------------------------
+# /images
+# ------------------------------
 @app.get("/images")
-def get_images():
+def get_images(request: Request):
+    bot = request.app.state.bot
     return {
         str(k): [
             {
                 "filename": img["filename"],
-                "user_id": img["user_id"],        # 使用者 ID
-                "username": img.get("username", "Unknown"),   # 使用者名稱
-                "status": img["status"]
+                "user_id": img["user_id"],
+                "username": img.get("username", "Unknown"),
+                "status": img["status"],
+                "event_id": img.get("event_id"),
+                "task_id": img.get("task_id")
             }
             for img in v
         ]
         for k, v in bot.user_images.items()
     }
 
-# POST /images
 @app.post("/images")
-def add_image(image: Image):
+def add_image(image: ImageData, request: Request):
+    bot = request.app.state.bot
     if image.user_id not in bot.user_images:
         bot.user_images[image.user_id] = []
-    # 假設 URL 是圖片的連結，初始狀態為 "pending"
     bot.user_images[image.user_id].append({
         "filename": image.filename,
         "url": image.url,
         "status": "pending",
-        "user_id": image.user_id,          # 使用者 ID
-        "username": "unknown"              # 初始使用者名稱，稍後更新
+        "user_id": image.user_id,
+        "username": "unknown"
     })
     return {"message": f"使用者 {image.user_id} 的圖片 {image.filename} 已儲存。"}
 
-# GET /votes
-@app.get("/votes")
-def get_votes():
-    if not hasattr(bot, "votes_history"):
-        bot.votes_history = []
-    return bot.votes_history
+# ------------------------------
+# /event
+# ------------------------------
+@app.post("/event")
+def create_event(data: EventData):
+    global event_counter
+    e_id = event_counter
+    bot.events[e_id] = {
+        "event_id": e_id,
+        "event_name": data.event_name,
+        "event_description": data.event_description,
+        "event_start_date": data.event_start_date,
+        "event_end_date": data.event_end_date,
+        "task_list": [],
+        "gamer_list": []
+    }
+    event_counter += 1
+    return {"event_id": e_id}
 
-# POST /votes
-class Vote(BaseModel):
-    title: str
-    up: int = 0
-    down: int = 0
+@app.get("/event")
+def get_events():
+    return list(bot.events.values())
 
-# 同時執行 Bot 與 API
+@app.put("/event")
+def reset_events():
+    bot.events.clear()
+    return {"message": "All events reset"}
+
+@app.get("/event/{event_id}")
+def get_event(event_id: int):
+    if event_id not in bot.events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    e = bot.events[event_id]
+    return {
+        **e,
+        "tasks": [{"task_id": t["task_id"], "task_name": t["task_name"]} for t in e["task_list"]],
+        "gamers": [{"gamer_id": g_id} for g_id in e["gamer_list"]]
+    }
+
+# ------------------------------
+# /task
+# ------------------------------
+@app.post("/task")
+def create_task(data: TaskData):
+    global task_counter
+    t_id = task_counter
+    t_info = {
+        "task_id": t_id,
+        "task_name": data.task_name,
+        "task_description": data.task_description,
+        "task_points": data.task_points,
+        "event_id": data.event_id,
+        "gamer_list": []
+    }
+    bot.tasks[t_id] = t_info
+    if data.event_id in bot.events:
+        bot.events[data.event_id]["task_list"].append(t_info)
+    task_counter += 1
+    return {"task_id": t_id}
+
+@app.get("/task/{task_id}")
+def get_task(task_id: int):
+    if task_id not in bot.tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return bot.tasks[task_id]
+
+# ------------------------------
+# /gamer
+# ------------------------------
+@app.post("/gamer")
+def create_gamer(data: GamerData):
+    new_id = len(gamers) + 1
+    gamers[new_id] = {
+        "gamer_id": new_id,
+        "gamer_dcid": data.gamer_dcid,
+        "gamer_card_number": data.gamer_card_number,
+        "gamer_is_blocked": data.gamer_is_blocked,
+        "gamer_bind_gamepass": data.gamer_bind_gamepass,
+        "history_event_list": [],
+        "history_event_pts_list": [],
+        "history_task_list": []
+    }
+    return {"gamer_id": new_id, "message": f"玩家 {new_id} 已建立"}
+
+@app.get("/gamer/{gamer_id}")
+def get_gamer_data(gamer_id: int):
+    if gamer_id not in gamers:
+        raise HTTPException(status_code=404, detail="Gamer not found")
+    return gamers[gamer_id]
+
+@app.put("/gamer/{gamer_id}/points")
+def add_points_to_gamer_api(gamer_id: int, points: int):
+    if gamer_id not in gamers:
+        raise HTTPException(status_code=404, detail="Gamer not found")
+    gamers[gamer_id]["history_event_pts_list"].append(points)
+    return {"message": f"已為玩家 {gamer_id} 新增 {points} 點數"}
+
+@app.put("/gamer/{gamer_id}/card")
+def update_gamer_card(gamer_id: int, new_card_number: str):
+    if gamer_id not in gamers:
+        raise HTTPException(status_code=404, detail="Gamer not found")
+    gamers[gamer_id]["gamer_card_number"] = new_card_number
+    return {"message": f"已為玩家 {gamer_id} 更新卡號為 {new_card_number}"}
+
+# ------------------------------
+# 主程式
+# ------------------------------
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    # 啟動 Discord 機器人
     loop.create_task(start_bot())
-    # 配置 Uvicorn 以在同一事件迴圈運行 FastAPI
     config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
     server = uvicorn.Server(config)
     loop.create_task(server.serve())
