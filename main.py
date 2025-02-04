@@ -16,7 +16,7 @@ intents.messages = True
 intents.guilds = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!RA ", intents=intents)
+bot = commands.Bot(command_prefix="RA ", intents=intents)
 
 bot.user_images = {}
 bot.events = {}

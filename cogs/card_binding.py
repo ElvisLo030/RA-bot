@@ -1,5 +1,3 @@
-# cogs/card_binding.py
-
 import discord
 from discord.ext import commands
 import re
@@ -7,7 +5,7 @@ import re
 class CardBindingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.card_pattern = re.compile(r'^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{8}$')
+        self.card_pattern = re.compile(r'^RGP(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{5}$')
 
     async def bind_card(self, user: discord.User, card_number: str):
         print(f"DEBUG: bind_card user={user}, card_number={card_number}")
