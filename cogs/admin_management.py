@@ -48,7 +48,8 @@ class CreateEventModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         code = self.event_code.value.strip()
-        pattern = r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{1,6}$'
+        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        print(f"DEBUG: validate_event_code called with event_code={code}")
         if not re.match(pattern, code):
             await interaction.response.send_message(
                 "活動編號格式錯誤。",

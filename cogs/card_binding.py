@@ -8,6 +8,10 @@ class CardBindingCog(commands.Cog):
         self.card_pattern = re.compile(r'^RGP(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{5}$')
 
     async def bind_card(self, user: discord.User, card_number: str):
+        for existing_user in self.bot.gamers.values():
+            if existing_user.get("gamer_card_number") == card_number:
+                return False, f"卡號 {card_number} 已被其他使用者綁定。"
+            
         print(f"DEBUG: bind_card user={user}, card_number={card_number}")
         if not self.card_pattern.match(card_number):
             return False, "卡號格式錯誤(需為RGPXXXXX)"
@@ -75,12 +79,6 @@ class CardBindingCog(commands.Cog):
             channel = await user.create_dm()
         view = SelectionMenuView(self, user)
         await channel.send("請選擇功能：", view=view)
-
-    @commands.command(name="卡片設定")
-    async def card_setting(self, ctx: commands.Context):
-        from cogs.selection_menu import SelectionMenuView
-        view = SelectionMenuView(self, ctx.author)
-        await ctx.send("請選擇所需功能：", view=view)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(CardBindingCog(bot))

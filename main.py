@@ -8,6 +8,7 @@ import uvicorn
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import re
+from discord.ext.commands import CheckFailure
 
 load_dotenv()
 
@@ -36,6 +37,12 @@ def add_points_internal(gamer_id: int, points: int) -> str:
         }
     bot.gamers[gamer_id]["history_event_pts_list"].append(points)
     return f"已為玩家 {gamer_id} 新增 {points} 點數"
+
+def not_blocked(ctx: commands.Context):
+    user_data = ctx.bot.gamers.get(ctx.author.id)
+    if user_data and user_data.get("gamer_is_blocked"):
+        raise CheckFailure("你已被加入黑名單，無法使用。")
+    return True
 
 bot.add_points_internal = add_points_internal
 
@@ -71,9 +78,10 @@ class EventData(BaseModel):
 
     @field_validator("event_code")
     def validate_event_code(cls, v):
-        pattern = r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{1,6}$'
+        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        print(f"DEBUG: validate_event_code called with event_code={v}")
         if not re.match(pattern, v):
-            raise ValueError("event_code 格式錯誤，至少1英文+1數字，長度1~6")
+            raise ValueError("event_code 格式錯誤，格式為RGEXXX")
         return v
 
 class GamerData(BaseModel):
@@ -88,6 +96,7 @@ def read_root():
 
 @app.post("/event")
 def create_event(data: EventData):
+    print(f"DEBUG: create_event API called with data={data}")
     if data.event_code in bot.events:
         raise HTTPException(status_code=400, detail="活動編號已存在")
     bot.events[data.event_code] = {
@@ -146,7 +155,7 @@ def add_points_to_gamer_api(gamer_id: int, points: int):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
     bot.gamers[gamer_id]["history_event_pts_list"].append(points)
-    return {"message": f"已為玩家 {gamer_id} 增加 {points} 點數"}
+    return {"message": f"已為玩家 {gamer_id} 增加 {points} 點"}
 
 @app.put("/gamer/{gamer_id}/card")
 def update_gamer_card(gamer_id: int, new_card_number: str):

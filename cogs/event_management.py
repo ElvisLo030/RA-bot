@@ -9,7 +9,8 @@ class EventManagementCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.command(name="新增活動")
     async def create_event(self, ctx: commands.Context, event_code: str, event_name: str, event_description: str, event_start_date: str, event_end_date: str):
-        pattern = r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{1,6}$'
+        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        print(f"DEBUG: create_event called with event_code={event_code}")
         if not re.match(pattern, event_code):
             await ctx.send("活動編號格式錯誤(RGE123)")
             return

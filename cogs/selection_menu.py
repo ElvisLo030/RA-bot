@@ -1,8 +1,8 @@
 import discord
 from discord.ext import commands
 from discord.ui import Select, View, Modal, TextInput
-
 from cogs.card_binding import CardBindingCog
+from main import not_blocked
 
 class CardBindModal(Modal):
     def __init__(self, cog: CardBindingCog):
@@ -81,7 +81,7 @@ class SelectionMenuSelect(discord.ui.Select):
             await interaction.response.send_message(f"你目前點數：{points}", ephemeral=True)
         elif choice == "upload_pic":
             await interaction.response.send_message(
-                "請在私訊輸入 `!RA 上傳圖片 “活動編號”` 並附加圖片。",
+                "請在私訊輸入 `RA 上傳圖片 “活動編號”` 並附加圖片。",
                 ephemeral=True
             )
 
@@ -94,6 +94,7 @@ class SelectionMenuCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    @commands.check(not_blocked)
     @commands.command(name="功能選單")
     async def feature_menu(self, ctx: commands.Context):
         if not isinstance(ctx.channel, discord.DMChannel):
