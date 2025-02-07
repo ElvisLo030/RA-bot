@@ -36,9 +36,9 @@ class ReviewSelect(discord.ui.Select):
 
                 if selected_value == "reject":
                     img["status"] = "rejected"
-                    await user.send(f"你的圖片 `{self.filename}` 審核失敗，請重新上傳。\n活動：{event_name}")
+                    await user.send(f"你的圖片 `{self.filename}` 審核未通過，請重新上傳。\n活動：{event_name}")
                     await interaction.response.send_message(
-                        f"圖片 `{self.filename}` 審核失敗，請重新上傳。", ephemeral=True
+                        f"圖片 `{self.filename}` 已拒絕", ephemeral=True
                     )
                     await self.disable_review(interaction, f"請重新上傳(活動:{event_name})")
                     return
@@ -88,7 +88,7 @@ class ImageReviewCog(commands.Cog):
             return
 
         if not event_code:
-            await ctx.send("請輸入活動編號，如: !RA 上傳圖片 AB12")
+            await ctx.send("請輸入活動編號，如: RA 上傳圖片 RAE001")
             return
 
         user_data = self.bot.gamers.get(ctx.author.id)
@@ -153,3 +153,4 @@ class ImageReviewCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ImageReviewCog(bot))
+    print("ImageReviewCog 已成功加載。")

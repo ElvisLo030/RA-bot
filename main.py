@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import re
 from discord.ext.commands import CheckFailure
+import json
 
 load_dotenv()
 
@@ -19,6 +20,55 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="RA ", intents=intents)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE_PATH = os.path.join(BASE_DIR, "data.json")
+
+def load_data():
+    if os.path.exists(DATA_FILE_PATH):
+        try:
+            with open(DATA_FILE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                bot.user_images = data.get("user_images", {})
+                bot.events = data.get("events", {})
+                # 將 gamers 的 key 轉回 int
+                raw_gamers = data.get("gamers", {})
+                bot.gamers = {int(k): v for k, v in raw_gamers.items()}
+                print("DEBUG: 成功載入 JSON 資料")
+        except Exception as e:
+            print(f"WARNING: 載入 JSON 資料失敗: {e}")
+    else:
+        print("DEBUG: data.json 不存在，建立預設空資料")
+        data = {
+            "user_images": {},
+            "events": {},
+            "gamers": {}
+        }
+        try:
+            with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print("DEBUG: 已自動建立新的 data.json")
+        except Exception as e:
+            print(f"ERROR: 建立 data.json 失敗: {e}")
+        bot.user_images = {}
+        bot.events = {}
+        bot.gamers = {}
+
+def save_data():
+    print("DEBUG: save_data() 正在執行...")
+    data = {
+        "user_images": bot.user_images,
+        "events": bot.events,
+        "gamers": bot.gamers
+    }
+    try:
+        with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print("DEBUG: 已將資料寫入 JSON") 
+    except Exception as e:
+        print("ERROR: 寫入 JSON 檔案失敗!", e)
+        import traceback
+        traceback.print_exc()
+
 bot.user_images = {}
 bot.events = {}
 bot.gamers = {}
@@ -27,7 +77,6 @@ def add_points_internal(gamer_id: int, points: int) -> str:
     if gamer_id not in bot.gamers:
         bot.gamers[gamer_id] = {
             "gamer_id": gamer_id,
-            "gamer_dcid": f"UnknownUser{gamer_id}",
             "gamer_card_number": None,
             "gamer_is_blocked": False,
             "gamer_bind_gamepass": None,
@@ -36,6 +85,8 @@ def add_points_internal(gamer_id: int, points: int) -> str:
             "history_event_pts_list": []
         }
     bot.gamers[gamer_id]["history_event_pts_list"].append(points)
+
+    save_data()
     return f"已為玩家 {gamer_id} 新增 {points} 點數"
 
 def not_blocked(ctx: commands.Context):
@@ -58,6 +109,7 @@ async def load_cogs():
     await bot.load_extension("cogs.admin_management")
 
 async def start_bot():
+    load_data()
     async with bot:
         await load_cogs()
         await bot.start(TOKEN)
@@ -78,14 +130,13 @@ class EventData(BaseModel):
 
     @field_validator("event_code")
     def validate_event_code(cls, v):
-        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        pattern = r'^RAE(?=.*[0-9])[A-Za-z0-9]{3}$'
         print(f"DEBUG: validate_event_code called with event_code={v}")
         if not re.match(pattern, v):
-            raise ValueError("event_code 格式錯誤，格式為RGEXXX")
+            raise ValueError("event_code 格式錯誤，格式為RAEXXX(需含數字+3碼英數)")
         return v
 
 class GamerData(BaseModel):
-    gamer_dcid: str
     gamer_card_number: str = None
     gamer_is_blocked: bool = False
     gamer_bind_gamepass: str = None
@@ -107,6 +158,7 @@ def create_event(data: EventData):
         "event_end_date": data.event_end_date,
         "gamer_list": []
     }
+    save_data()
     return {"event_code": data.event_code, "message": "活動已建立"}
 
 @app.get("/event")
@@ -122,6 +174,7 @@ def get_event(event_code: str):
 @app.put("/event")
 def reset_events():
     bot.events.clear()
+    save_data()
     return {"message": "All events reset"}
 
 @app.get("/gamer")
@@ -140,7 +193,6 @@ def create_gamer(data: GamerData):
     new_id = len(bot.gamers) + 1
     bot.gamers[new_id] = {
         "gamer_id": new_id,
-        "gamer_dcid": data.gamer_dcid,
         "gamer_card_number": data.gamer_card_number,
         "gamer_is_blocked": data.gamer_is_blocked,
         "gamer_bind_gamepass": data.gamer_bind_gamepass,
@@ -148,6 +200,7 @@ def create_gamer(data: GamerData):
         "history_event_list": [],
         "history_event_pts_list": []
     }
+    save_data()
     return {"gamer_id": new_id, "message": f"玩家 {new_id} 已建立"}
 
 @app.put("/gamer/{gamer_id}/points")
@@ -155,6 +208,7 @@ def add_points_to_gamer_api(gamer_id: int, points: int):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
     bot.gamers[gamer_id]["history_event_pts_list"].append(points)
+    save_data()
     return {"message": f"已為玩家 {gamer_id} 增加 {points} 點"}
 
 @app.put("/gamer/{gamer_id}/card")
@@ -162,6 +216,7 @@ def update_gamer_card(gamer_id: int, new_card_number: str):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
     bot.gamers[gamer_id]["gamer_card_number"] = new_card_number
+    save_data()
     return {"message": f"玩家 {gamer_id} 的卡號已更新為 {new_card_number}"}
 
 @app.get("/gamer/card/{card_number}")

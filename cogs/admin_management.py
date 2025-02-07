@@ -4,6 +4,7 @@ from discord.ui import View, Select, Modal, TextInput
 import re
 import os
 from dotenv import load_dotenv
+from main import save_data
 
 load_dotenv()
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
@@ -17,8 +18,8 @@ class CreateEventModal(Modal):
         self.bot = bot
 
         self.event_code = TextInput(
-            label="活動編號(RGEXXX)",
-            placeholder="RGEXXX",
+            label="活動編號(RAEXXX)",
+            placeholder="RAEXXX",
             max_length=6
         )
         self.event_name = TextInput(
@@ -48,7 +49,7 @@ class CreateEventModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         code = self.event_code.value.strip()
-        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        pattern = r'^RAE(?=.*[0-9])[A-Za-z0-9]{3}$'
         print(f"DEBUG: validate_event_code called with event_code={code}")
         if not re.match(pattern, code):
             await interaction.response.send_message(
@@ -69,6 +70,7 @@ class CreateEventModal(Modal):
             "event_end_date": self.end_date.value,
             "gamer_list": []
         }
+        save_data()
         await interaction.response.send_message(
             f"活動 {self.event_name.value} 已建立，編號為 = {code}",
             ephemeral=True
@@ -104,7 +106,6 @@ class ModifyCardModal(Modal):
             # 初始化
             self.bot.gamers[user_id_int] = {
                 "gamer_id": user_id_int,
-                "gamer_dcid": f"UnknownUser{user_id_int}",
                 "gamer_card_number": self.new_card.value,
                 "gamer_is_blocked": False,
                 "gamer_bind_gamepass": None,
@@ -115,6 +116,7 @@ class ModifyCardModal(Modal):
         else:
             self.bot.gamers[user_id_int]["gamer_card_number"] = self.new_card.value
 
+        save_data()
         await interaction.response.send_message(
             f"玩家 {user_id_int} 的卡號已更新為 {self.new_card.value}", 
             ephemeral=True
@@ -183,7 +185,7 @@ class AddPointsModal(Modal):
         self.bot = bot
 
         self.user_id = TextInput(label="玩家DC ID", placeholder="數字", max_length=20)
-        self.points = TextInput(label="點數", placeholder="要給予多少點數", max_length=10)
+        self.points = TextInput(label="點數", placeholder="要加多少點數", max_length=10)
         self.add_item(self.user_id)
         self.add_item(self.points)
 
@@ -218,7 +220,7 @@ class QueryAllGamersModal(Modal):
         kw = self.keyword.value.strip().lower()
         results = []
         for g_id, data in self.bot.gamers.items():
-            text_to_check = (f"{data.get('gamer_dcid','')} {data.get('gamer_card_number','')}").lower()
+            text_to_check = (f"{data.get('gamer_card_number','')}").lower()
             if kw == "" or kw in text_to_check:
                 results.append((g_id, data))
 
@@ -229,7 +231,7 @@ class QueryAllGamersModal(Modal):
         msg_lines = []
         for g_id, info in results:
             msg_lines.append(
-                f"ID={g_id}, DCID={info['gamer_dcid']}, 卡號={info['gamer_card_number']}, 黑名單={info['gamer_is_blocked']}"
+                f"ID={g_id}, 卡號={info['gamer_card_number']}, 黑名單={info['gamer_is_blocked']}"
             )
         final_msg = "\n".join(msg_lines)
         await interaction.response.send_message(final_msg, ephemeral=True)

@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import re
+from main import save_data
 
 class CardBindingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -20,7 +21,6 @@ class CardBindingCog(commands.Cog):
             print("DEBUG: user not in self.bot.gamers => 建立 gamer")
             self.bot.gamers[user.id] = {
                 "gamer_id": user.id,
-                "gamer_dcid": str(user),
                 "gamer_card_number": card_number,
                 "gamer_is_blocked": False,
                 "gamer_bind_gamepass": None,
@@ -31,6 +31,7 @@ class CardBindingCog(commands.Cog):
         else:
             self.bot.gamers[user.id]["gamer_card_number"] = card_number
 
+        save_data()  # 確保每次更新資料後都呼叫 save_data()
         return True, f"你的卡號 {card_number} 綁定成功！"
 
     async def query_card(self, user: discord.User):
@@ -53,7 +54,6 @@ class CardBindingCog(commands.Cog):
             print("DEBUG: user不在 gamers => 建立")
             self.bot.gamers[user.id] = {
                 "gamer_id": user.id,
-                "gamer_dcid": str(user),
                 "gamer_card_number": None,
                 "gamer_is_blocked": False,
                 "gamer_bind_gamepass": None,
@@ -70,6 +70,7 @@ class CardBindingCog(commands.Cog):
         self.bot.gamers[user.id].setdefault("joined_events", [])
         self.bot.gamers[user.id]["joined_events"].append(event_code)
 
+        save_data()  # 確保每次更新資料後都呼叫 save_data()
         return True, f"你已成功參加活動 {event_code}"
 
     async def update_menu(self, user: discord.User):

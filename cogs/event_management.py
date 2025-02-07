@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import re
+from main import save_data
 
 class EventManagementCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -9,7 +10,7 @@ class EventManagementCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.command(name="新增活動")
     async def create_event(self, ctx: commands.Context, event_code: str, event_name: str, event_description: str, event_start_date: str, event_end_date: str):
-        pattern = r'^RGE(?=.*[0-9])[A-Za-z0-9]{3}$'
+        pattern = r'^RAE(?=.*[0-9])[A-Za-z0-9]{3}$'
         print(f"DEBUG: create_event called with event_code={event_code}")
         if not re.match(pattern, event_code):
             await ctx.send("活動編號格式錯誤(RGE123)")
@@ -27,6 +28,7 @@ class EventManagementCog(commands.Cog):
             "event_end_date": event_end_date,
             "gamer_list": []
         }
+        save_data()
         await ctx.send(f"已建立活動 {event_name}(編號:{event_code})")
 
     @commands.has_permissions(administrator=True)

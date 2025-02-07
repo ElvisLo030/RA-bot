@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord.ui import Select, View, Modal, TextInput
 from cogs.card_binding import CardBindingCog
 from main import not_blocked
+from main import save_data
 
 class CardBindModal(Modal):
     def __init__(self, cog: CardBindingCog):
@@ -14,6 +15,7 @@ class CardBindModal(Modal):
             max_length=8
         )
         self.add_item(self.card_number)
+        save_data()
 
     async def on_submit(self, interaction: discord.Interaction):
         success, msg = await self.cog.bind_card(interaction.user, self.card_number.value)
@@ -111,3 +113,4 @@ class SelectionMenuCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(SelectionMenuCog(bot))
+    print("SelectionMenuCog 已成功加載。")
