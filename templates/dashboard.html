@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>RA DCBot Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1, h2, h3 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #eee; }
+        #log { background-color: #f9f9f9; border: 1px solid #ccc; height: 200px; overflow-y: scroll; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>RA DCBot Dashboard</h1>
+    <p>狀態：{{ status }}</p>
+    <p>{{ debug }}</p>
+
+    <h2>活動列表</h2>
+    <div id="events-container">
+        <table id="events-table">
+            <thead>
+                <tr>
+                    <th>活動編號</th>
+                    <th>活動名稱</th>
+                    <th>活動描述</th>
+                    <th>開始日期</th>
+                    <th>結束日期</th>
+                    <th>任務數量</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, event in events.items() %}
+                <tr>
+                    <td>{{ event.event_code }}</td>
+                    <td>{{ event.event_name }}</td>
+                    <td>{{ event.event_description }}</td>
+                    <td>{{ event.event_start_date }}</td>
+                    <td>{{ event.event_end_date }}</td>
+                    <td>{{ event.tasks | length }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>任務列表</h2>
+    {% for code, event in events.items() %}
+      <h3>活動 {{ code }} - {{ event.event_name }}</h3>
+      {% if event.tasks %}
+        <table>
+          <thead>
+             <tr>
+                <th>任務 ID</th>
+                <th>任務名稱</th>
+                <th>任務描述</th>
+                <th>任務給予點數</th>
+                <th>操作</th>
+             </tr>
+          </thead>
+          <tbody>
+             {% for task in event.tasks %}
+             <tr>
+                <td>{{ task.task_id }}</td>
+                <td>{{ task.task_name }}</td>
+                <td>{{ task.task_description }}</td>
+                <td>{{ task.task_points }}</td>
+                <td><a href="/task/{{ code }}/{{ task.task_id }}">查看細節</a></td>
+             </tr>
+             {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>無任務</p>
+      {% endif %}
+    {% endfor %}
+
+    <h2>玩家列表</h2>
+    <div id="gamers-container">
+        <table id="gamers-table">
+            <thead>
+                <tr>
+                    <th>玩家 ID</th>
+                    <th>卡號</th>
+                    <th>參加活動</th>
+                    <th>累計點數</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for id, gamer in gamers.items() %}
+                <tr>
+                    <td>{{ id }}</td>
+                    <td>{{ gamer.gamer_card_number }}</td>
+                    <td>{{ gamer.joined_events | join(', ') }}</td>
+                    <td>{{ gamer.history_event_pts_list | sum }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</body>
+</html>

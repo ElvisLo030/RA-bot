@@ -3,8 +3,10 @@ from discord.ext import commands
 from discord.ui import View, Select, Modal, TextInput
 import re
 import os
+import asyncio  # 確保能捕捉 asyncio.TimeoutError
 from dotenv import load_dotenv
 from main import save_data
+from typing import Optional, List
 
 load_dotenv()
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
@@ -12,13 +14,14 @@ ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 def is_admin_channel(ctx):
     return ctx.channel.id == ADMIN_CHANNEL_ID
 
+# 建立活動 Modal（僅保留活動基本資料，共 5 個欄位）
 class CreateEventModal(Modal):
     def __init__(self, bot: commands.Bot):
         super().__init__(title="創建活動")
         self.bot = bot
 
         self.event_code = TextInput(
-            label="活動編號(RAEXXX)",
+            label="活動編號 (RAEXXX)",
             placeholder="RAEXXX",
             max_length=6
         )
@@ -48,33 +51,151 @@ class CreateEventModal(Modal):
         self.add_item(self.end_date)
 
     async def on_submit(self, interaction: discord.Interaction):
-        code = self.event_code.value.strip()
-        pattern = r'^RAE(?=.*[0-9])[A-Za-z0-9]{3}$'
-        print(f"DEBUG: validate_event_code called with event_code={code}")
-        if not re.match(pattern, code):
-            await interaction.response.send_message(
-                "活動編號格式錯誤。",
+        await interaction.response.defer(ephemeral=True)
+        try:
+            code = self.event_code.value.strip()
+            pattern = r'^RAE(?=.*[0-9])[A-Za-z0-9]{3}$'
+            if not re.match(pattern, code):
+                await interaction.followup.send("活動編號格式錯誤！", ephemeral=True)
+                return
+            if not hasattr(self.bot, "events"):
+                self.bot.events = {}
+            if code in self.bot.events:
+                await interaction.followup.send("該活動編號已存在。", ephemeral=True)
+                return
+
+            self.bot.events[code] = {
+                "event_code": code,
+                "event_name": self.event_name.value.strip(),
+                "event_description": self.event_desc.value.strip(),
+                "event_start_date": self.start_date.value.strip(),
+                "event_end_date": self.end_date.value.strip(),
+                "gamer_list": [],
+                "tasks": []
+            }
+            save_data()
+            await interaction.followup.send(
+                f"活動 {self.event_name.value} 已建立，編號：{code}。請使用【新增任務】功能加入任務。",
                 ephemeral=True
             )
-            return
+        except Exception as e:
+            print("Error in CreateEventModal.on_submit:", e)
+            await interaction.followup.send("建立活動時發生錯誤。", ephemeral=True)
 
-        if code in self.bot.events:
-            await interaction.response.send_message("該活動編號已存在，請更換新的編號。", ephemeral=True)
-            return
+# 新增任務 Modal（以表單方式建立任務，欄位：活動編號、任務名稱、任務給予的點數）
+class CreateTaskModal(Modal):
+    def __init__(self, bot: commands.Bot):
+        super().__init__(title="新增任務")
+        self.bot = bot
 
-        self.bot.events[code] = {
-            "event_code": code,
-            "event_name": self.event_name.value,
-            "event_description": self.event_desc.value,
-            "event_start_date": self.start_date.value,
-            "event_end_date": self.end_date.value,
-            "gamer_list": []
-        }
-        save_data()
-        await interaction.response.send_message(
-            f"活動 {self.event_name.value} 已建立，編號為 = {code}",
-            ephemeral=True
+        self.event_code = TextInput(
+            label="活動編號",
+            placeholder="輸入活動編號",
+            max_length=10
         )
+        self.task_name = TextInput(
+            label="任務名稱",
+            placeholder="輸入任務名稱",
+            max_length=50
+        )
+        self.task_points = TextInput(
+            label="任務給予的點數",
+            placeholder="輸入任務點數",
+            max_length=10
+        )
+        self.add_item(self.event_code)
+        self.add_item(self.task_name)
+        self.add_item(self.task_points)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            event_code = self.event_code.value.strip()
+            task_name = self.task_name.value.strip()
+            task_points_str = self.task_points.value.strip()
+            if not event_code or not task_name or not task_points_str:
+                await interaction.followup.send("所有欄位皆為必填！", ephemeral=True)
+                return
+            try:
+                task_points = int(task_points_str)
+            except ValueError:
+                await interaction.followup.send("任務點數必須是數字！", ephemeral=True)
+                return
+            if event_code not in self.bot.events:
+                await interaction.followup.send("活動編號不存在！", ephemeral=True)
+                return
+
+            tasks = self.bot.events[event_code].get("tasks", [])
+            new_id = len(tasks) + 1
+            tasks.append({
+                "task_id": new_id,
+                "task_name": task_name,
+                "task_description": "",
+                "task_points": task_points,
+                "assigned_users": [],
+                "checked_users": []
+            })
+            self.bot.events[event_code]["tasks"] = tasks
+            save_data()
+            await interaction.followup.send(
+                f"已新增任務 {task_name} 到活動 {event_code}，點數：{task_points}",
+                ephemeral=True
+            )
+        except Exception as e:
+            print("Error in CreateTaskModal.on_submit:", e)
+            await interaction.followup.send("新增任務時發生錯誤。", ephemeral=True)
+
+class AddTaskModal(Modal):
+    def __init__(self, bot: commands.Bot, event_code: str):
+        super().__init__(title="新增任務")
+        self.bot = bot
+        self.event_code = event_code
+
+        self.task_name = TextInput(
+            label="任務名稱",
+            placeholder="輸入任務名稱",
+            required=True
+        )
+        self.task_description = TextInput(
+            label="任務描述",
+            placeholder="輸入任務描述",
+            required=False
+        )
+
+        self.add_item(self.task_name)
+        self.add_item(self.task_description)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            task_name = self.task_name.value.strip()
+            task_description = self.task_description.value.strip()
+            if not task_name:
+                await interaction.followup.send("任務名稱不能為空！", ephemeral=True)
+                return
+
+            if self.event_code not in self.bot.events:
+                await interaction.followup.send("活動不存在！", ephemeral=True)
+                return
+
+            tasks = self.bot.events[self.event_code].get("tasks", [])
+            new_id = len(tasks) + 1
+            tasks.append({
+                "task_id": new_id,
+                "task_name": task_name,
+                "task_description": task_description,
+                "assigned_users": [],
+                "checked_users": []
+            })
+            self.bot.events[self.event_code]["tasks"] = tasks
+            save_data()
+            await interaction.followup.send(
+                f"已新增任務 {task_name} 到活動 {self.event_code}。",
+                ephemeral=True
+            )
+        except Exception as e:
+            print("Error in AddTaskModal.on_submit:", e)
+            await interaction.followup.send("新增任務時發生錯誤。", ephemeral=True)
 
 class ModifyCardModal(Modal):
     def __init__(self, bot: commands.Bot):
@@ -88,22 +209,19 @@ class ModifyCardModal(Modal):
         self.add_item(self.new_card)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         try:
             user_id_int = int(self.user_id.value)
         except ValueError:
-            await interaction.response.send_message("玩家ID必須是數字", ephemeral=True)
+            await interaction.followup.send("玩家ID必須是數字", ephemeral=True)
             return
 
         card_pattern = re.compile(r'^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{8}$')
         if not card_pattern.match(self.new_card.value):
-            await interaction.response.send_message(
-                "卡號格式錯誤，請重新數入",
-                ephemeral=True
-            )
+            await interaction.followup.send("卡號格式錯誤，請重新數入", ephemeral=True)
             return
 
         if user_id_int not in self.bot.gamers:
-            # 初始化
             self.bot.gamers[user_id_int] = {
                 "gamer_id": user_id_int,
                 "gamer_card_number": self.new_card.value,
@@ -117,7 +235,7 @@ class ModifyCardModal(Modal):
             self.bot.gamers[user_id_int]["gamer_card_number"] = self.new_card.value
 
         save_data()
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"玩家 {user_id_int} 的卡號已更新為 {self.new_card.value}", 
             ephemeral=True
         )
@@ -130,40 +248,32 @@ class QueryCardByUserModal(Modal):
         self.add_item(self.user_id)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         try:
             user_id_int = int(self.user_id.value)
         except ValueError:
-            await interaction.response.send_message("玩家DC ID必須是20碼數字", ephemeral=True)
+            await interaction.followup.send("玩家DC ID必須是20碼數字", ephemeral=True)
             return
 
         if user_id_int not in self.bot.gamers:
-            await interaction.response.send_message("該玩家不存在或尚未綁定卡號", ephemeral=True)
+            await interaction.followup.send("該玩家不存在或尚未綁定卡號", ephemeral=True)
             return
 
         card = self.bot.gamers[user_id_int].get("gamer_card_number")
         if card:
-            await interaction.response.send_message(
-                f"玩家 {user_id_int} 的卡號為：{card}",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"玩家 {user_id_int} 的卡號為：{card}", ephemeral=True)
         else:
-            await interaction.response.send_message(
-                f"玩家 {user_id_int} 尚未綁定卡號",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"玩家 {user_id_int} 尚未綁定卡號", ephemeral=True)
 
 class QueryUserByCardModal(Modal):
     def __init__(self, bot: commands.Bot):
         super().__init__(title="查詢玩家ID(競音卡號)")
         self.bot = bot
-        self.card_number = TextInput(
-            label="卡號",
-            placeholder="RGPXXXXX",
-            max_length=8
-        )
+        self.card_number = TextInput(label="卡號", placeholder="RGPXXXXX", max_length=8)
         self.add_item(self.card_number)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         card = self.card_number.value.strip()
         found_user = None
         for g_id, data in self.bot.gamers.items():
@@ -172,12 +282,9 @@ class QueryUserByCardModal(Modal):
                 break
 
         if found_user is None:
-            await interaction.response.send_message("找不到此卡號的玩家", ephemeral=True)
+            await interaction.followup.send("找不到此卡號的玩家", ephemeral=True)
         else:
-            await interaction.response.send_message(
-                f"卡號 {card} 屬於玩家 {found_user}",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"卡號 {card} 屬於玩家 {found_user}", ephemeral=True)
 
 class AddPointsModal(Modal):
     def __init__(self, bot: commands.Bot):
@@ -190,19 +297,20 @@ class AddPointsModal(Modal):
         self.add_item(self.points)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         try:
             uid = int(self.user_id.value)
             pts = int(self.points.value)
         except ValueError:
-            await interaction.response.send_message("玩家ID和點數都必須是數字", ephemeral=True)
+            await interaction.followup.send("玩家ID和點數都必須是數字", ephemeral=True)
             return
 
         if not hasattr(self.bot, "add_points_internal"):
-            await interaction.response.send_message("bot 未定義 add_points_internal，無法增加點數", ephemeral=True)
+            await interaction.followup.send("bot 未定義 add_points_internal，無法增加點數", ephemeral=True)
             return
 
         msg = self.bot.add_points_internal(uid, pts)
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
 
 class QueryAllGamersModal(Modal):
     def __init__(self, bot: commands.Bot):
@@ -217,6 +325,7 @@ class QueryAllGamersModal(Modal):
         self.add_item(self.keyword)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         kw = self.keyword.value.strip().lower()
         results = []
         for g_id, data in self.bot.gamers.items():
@@ -225,16 +334,14 @@ class QueryAllGamersModal(Modal):
                 results.append((g_id, data))
 
         if not results:
-            await interaction.response.send_message("找不到任何符合的玩家", ephemeral=True)
+            await interaction.followup.send("找不到任何符合的玩家", ephemeral=True)
             return
 
         msg_lines = []
         for g_id, info in results:
-            msg_lines.append(
-                f"ID={g_id}, 卡號={info['gamer_card_number']}, 黑名單={info['gamer_is_blocked']}"
-            )
+            msg_lines.append(f"ID={g_id}, 卡號={info['gamer_card_number']}, 黑名單={info['gamer_is_blocked']}")
         final_msg = "\n".join(msg_lines)
-        await interaction.response.send_message(final_msg, ephemeral=True)
+        await interaction.followup.send(final_msg, ephemeral=True)
 
 class BlockUnblockModal(Modal):
     def __init__(self, bot: commands.Bot):
@@ -248,25 +355,26 @@ class BlockUnblockModal(Modal):
         self.add_item(self.block_or_unblock)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         try:
             user_id_int = int(self.user_id.value)
         except ValueError:
-            await interaction.response.send_message("玩家ID必須是數字", ephemeral=True)
+            await interaction.followup.send("玩家ID必須是數字", ephemeral=True)
             return
 
         action = self.block_or_unblock.value.strip().lower()
         if user_id_int not in self.bot.gamers:
-            await interaction.response.send_message("該玩家不存在", ephemeral=True)
+            await interaction.followup.send("該玩家不存在", ephemeral=True)
             return
 
         if action == "block":
             self.bot.gamers[user_id_int]["gamer_is_blocked"] = True
-            await interaction.response.send_message(f"玩家 {user_id_int} 已被封鎖", ephemeral=True)
+            await interaction.followup.send(f"玩家 {user_id_int} 已被封鎖", ephemeral=True)
         elif action == "unblock":
             self.bot.gamers[user_id_int]["gamer_is_blocked"] = False
-            await interaction.response.send_message(f"玩家 {user_id_int} 已解除封鎖", ephemeral=True)
+            await interaction.followup.send(f"玩家 {user_id_int} 已解除封鎖", ephemeral=True)
         else:
-            await interaction.response.send_message("請輸入 block 或 unblock", ephemeral=True)
+            await interaction.followup.send("請輸入 block 或 unblock", ephemeral=True)
 
 class AdminManagementSelect(Select):
     def __init__(self, bot: commands.Bot):
@@ -279,6 +387,7 @@ class AdminManagementSelect(Select):
             discord.SelectOption(label="查詢玩家ID(卡號)", description="請詢問使用者卡片編號，若無法查詢可使用查詢玩家卡號功能", value="query_user_by_card"),
             discord.SelectOption(label="查詢玩家資料", description="請盡量以關鍵字查詢，若無輸入關鍵字會抓取所有資料", value="query_all_gamers"),
             discord.SelectOption(label="封鎖/解除封鎖玩家", value="block_unblock"),
+            discord.SelectOption(label="新增任務", description="新增任務到指定活動", value="add_task")
         ]
         super().__init__(placeholder="選擇管理功能...", min_values=1, max_values=1, options=options)
 
@@ -311,6 +420,11 @@ class AdminManagementSelect(Select):
 
         elif choice == "add_points_modal":
             modal = AddPointsModal(self.bot)
+            await interaction.response.send_modal(modal)
+
+        elif choice == "add_task":
+            # 使用新的 CreateTaskModal
+            modal = CreateTaskModal(self.bot)
             await interaction.response.send_modal(modal)
 
 class AdminManagementView(View):

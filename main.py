@@ -1,18 +1,28 @@
-import discord
-from discord.ext import commands
 import os
-import asyncio
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, field_validator
-import uvicorn
-from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-import re
-from discord.ext.commands import CheckFailure
 import json
+import asyncio
+import traceback
+import re
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, Depends, status
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel, field_validator
+from discord.ext import commands
+from discord.ext.commands import CheckFailure
+from dotenv import load_dotenv
+from typing import Optional, List
+import secrets
 
 load_dotenv()
 
+import uvicorn
+import discord
+
+# ----------------------------
+# Discord Bot 初始化
+# ----------------------------
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
@@ -38,11 +48,7 @@ def load_data():
             print(f"WARNING: 載入 JSON 資料失敗: {e}")
     else:
         print("DEBUG: data.json 不存在，建立預設空資料")
-        data = {
-            "user_images": {},
-            "events": {},
-            "gamers": {}
-        }
+        data = {"user_images": {}, "events": {}, "gamers": {}}
         try:
             with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -63,16 +69,16 @@ def save_data():
     try:
         with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        print("DEBUG: 已將資料寫入 JSON") 
+        print("DEBUG: 已將資料寫入 JSON")
     except Exception as e:
         print("ERROR: 寫入 JSON 檔案失敗!", e)
-        import traceback
         traceback.print_exc()
 
 bot.user_images = {}
 bot.events = {}
 bot.gamers = {}
 
+# 以下函式更新資料時，不再推送任何 log 訊息
 def add_points_internal(gamer_id: int, points: int) -> str:
     if gamer_id not in bot.gamers:
         bot.gamers[gamer_id] = {
@@ -85,7 +91,6 @@ def add_points_internal(gamer_id: int, points: int) -> str:
             "history_event_pts_list": []
         }
     bot.gamers[gamer_id]["history_event_pts_list"].append(points)
-
     save_data()
     return f"已為玩家 {gamer_id} 新增 {points} 點數"
 
@@ -107,6 +112,7 @@ async def load_cogs():
     await bot.load_extension("cogs.image_review")
     await bot.load_extension("cogs.event_management")
     await bot.load_extension("cogs.admin_management")
+    await bot.load_extension("cogs.task_management")
 
 async def start_bot():
     load_data()
@@ -119,14 +125,35 @@ async def lifespan(app: FastAPI):
     app.state.bot = bot
     yield
 
+# ----------------------------
+# FastAPI 應用與 Dashboard 設定
+# ----------------------------
 app = FastAPI(lifespan=lifespan)
+templates = Jinja2Templates(directory="templates")
 
+# HTTP Basic 認證設定
+security = HTTPBasic()
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = os.getenv("DASHBOARD_USERNAME")
+    correct_password = os.getenv("DASHBOARD_PASSWORD")
+    is_valid_username = secrets.compare_digest(credentials.username, correct_username)
+    is_valid_password = secrets.compare_digest(credentials.password, correct_password)
+    if not (is_valid_username and is_valid_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="驗證失敗，請檢查帳號密碼",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+# Pydantic 模型
 class EventData(BaseModel):
     event_code: str
     event_name: str
     event_description: str
     event_start_date: str
     event_end_date: str
+    tasks: Optional[List[dict]] = None
 
     @field_validator("event_code")
     def validate_event_code(cls, v):
@@ -156,8 +183,21 @@ def create_event(data: EventData):
         "event_description": data.event_description,
         "event_start_date": data.event_start_date,
         "event_end_date": data.event_end_date,
-        "gamer_list": []
+        "gamer_list": [],
+        "tasks": []
     }
+    if data.tasks:
+        task_id_start = 1
+        for t in data.tasks:
+            bot.events[data.event_code]["tasks"].append({
+                "task_id": task_id_start,
+                "task_name": t.get("task_name", "未命名任務"),
+                "task_description": t.get("task_description", ""),
+                "task_points": t.get("task_points", 0),
+                "assigned_users": [],
+                "checked_users": []
+            })
+            task_id_start += 1
     save_data()
     return {"event_code": data.event_code, "message": "活動已建立"}
 
@@ -226,8 +266,69 @@ def get_gamer_by_card(card_number: str):
             return data
     raise HTTPException(status_code=404, detail="Player with this card number not found")
 
+# 新增任務 API（包含 task_points 欄位）
+@app.post("/event/{event_code}/task")
+def add_task_to_event(event_code: str, task_name: str, task_description: str = "", task_points: int = 0):
+    if event_code not in bot.events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    tasks = bot.events[event_code].get("tasks", [])
+    new_id = len(tasks) + 1
+    tasks.append({
+        "task_id": new_id,
+        "task_name": task_name,
+        "task_description": task_description,
+        "task_points": task_points,
+        "assigned_users": [],
+        "checked_users": []
+    })
+    bot.events[event_code]["tasks"] = tasks
+    save_data()
+    return {"message": f"已新增任務 {task_name} (點數：{task_points}) 到活動 {event_code}"}
+
+# 新增任務細節檢視功能
+@app.get("/task/{event_code}/{task_id}", response_class=HTMLResponse)
+def task_detail(request: Request, event_code: str, task_id: int, username: str = Depends(get_current_username)):
+    if event_code not in bot.events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    task = None
+    for t in bot.events[event_code].get("tasks", []):
+        if t["task_id"] == task_id:
+            task = t
+            break
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return templates.TemplateResponse("task_detail.html", {
+        "request": request,
+        "event_code": event_code,
+        "task": task
+    })
+
+# Dashboard 頁面（需通過 HTTP Basic 認證）
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request, username: str = Depends(get_current_username)):
+    status = "機器人運作中"
+    debug_info = "DEBUG: 資料載入成功"
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "events": bot.events,
+        "gamers": bot.gamers,
+        "status": status,
+        "debug": debug_info
+    })
+
+# ----------------------------
+# 移除所有 log 功能，故不再建立任何 SSE log或資料更新推播功能
+# ----------------------------
+
+# ----------------------------
+# 同時啟動 Discord Bot 與 FastAPI 網站
+# ----------------------------
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+    # 建立新的事件迴圈並設定為當前事件迴圈
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    global_loop = loop  # 設定全域事件迴圈
+    # 移除 log_queue 與 data_update_queue 初始化，因不再推播 log 資料
     loop.create_task(start_bot())
     config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
     server = uvicorn.Server(config)

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>任務細節 - {{ task.task_name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #eee; }
+    </style>
+</head>
+<body>
+    <h1>任務細節 - {{ task.task_name }}</h1>
+    <p>活動編號：{{ event_code }}</p>
+    <table>
+        <tr>
+            <th>任務 ID</th>
+            <td>{{ task.task_id }}</td>
+        </tr>
+        <tr>
+            <th>任務名稱</th>
+            <td>{{ task.task_name }}</td>
+        </tr>
+        <tr>
+            <th>任務描述</th>
+            <td>{{ task.task_description }}</td>
+        </tr>
+        <tr>
+            <th>任務給予點數</th>
+            <td>{{ task.task_points }}</td>
+        </tr>
+        <tr>
+            <th>Assigned Users</th>
+            <td>{{ task.assigned_users | join(', ') }}</td>
+        </tr>
+        <tr>
+            <th>Checked Users</th>
+            <td>{{ task.checked_users | join(', ') }}</td>
+        </tr>
+    </table>
+    <a href="/dashboard">返回 Dashboard</a>
+</body>
+</html>

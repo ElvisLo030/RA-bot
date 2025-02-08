@@ -8,24 +8,33 @@ load_dotenv()
 TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID"))
 
 class ReviewSelect(discord.ui.Select):
-    def __init__(self, bot: commands.Bot, user_id: int, filename: str, event_code: str):
-        options = [
-            discord.SelectOption(label="累計1點（通過）", value="1"),
-            discord.SelectOption(label="累計2點（通過）", value="2"),
-            discord.SelectOption(label="累計3點（通過）", value="3"),
-            discord.SelectOption(label="拒絕", value="reject")
-        ]
-        super().__init__(placeholder="審核結果", min_values=1, max_values=1, options=options)
+    def __init__(self, bot: commands.Bot, user_id: int, filename: str, event_code: str, task_id: int):
         self.bot = bot
         self.user_id = user_id
         self.filename = filename
         self.event_code = event_code
+        self.task_id = task_id
+        # 從任務資料中取得該任務應給予的點數，預設為 0
+        task_points = 0
+        event_obj = self.bot.events.get(event_code)
+        if event_obj:
+            for t in event_obj.get("tasks", []):
+                if t["task_id"] == task_id:
+                    task_points = t.get("task_points", 0)
+                    break
+        options = [
+            discord.SelectOption(label=f"通過 (+{task_points}點)", value=str(task_points)),
+            discord.SelectOption(label="拒絕", value="reject")
+        ]
+        super().__init__(placeholder="審核結果", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         selected_value = self.values[0]
         data = self.bot.user_images.get(self.user_id, [])
         for img in data:
-            if img["filename"] == self.filename:
+            if (img["filename"] == self.filename 
+                and img.get("task_id") == self.task_id 
+                and img["status"] == "pending"):
                 user = self.bot.get_user(self.user_id) or await self.bot.fetch_user(self.user_id)
                 if not user:
                     return
@@ -36,11 +45,13 @@ class ReviewSelect(discord.ui.Select):
 
                 if selected_value == "reject":
                     img["status"] = "rejected"
-                    await user.send(f"你的圖片 `{self.filename}` 審核未通過，請重新上傳。\n活動：{event_name}")
-                    await interaction.response.send_message(
-                        f"圖片 `{self.filename}` 已拒絕", ephemeral=True
+                    await user.send(
+                        f"你的圖片 `{self.filename}` (任務ID={self.task_id}) 審核未通過，請重新上傳。\n活動：{event_name}"
                     )
-                    await self.disable_review(interaction, f"請重新上傳(活動:{event_name})")
+                    await interaction.response.send_message(
+                        f"已拒絕 `{self.filename}` (任務ID={self.task_id})", ephemeral=True
+                    )
+                    await self.disable_review(interaction, f"任務 {self.task_id} 審核：已拒絕")
                     return
                 else:
                     points = int(selected_value)
@@ -49,33 +60,140 @@ class ReviewSelect(discord.ui.Select):
                         result_msg = self.bot.add_points_internal(self.user_id, points)
                     except AttributeError:
                         result_msg = "bot 未定義 add_points_internal"
+                    # 更新 checked_users：將該使用者記錄到該任務的 checked_users 中
+                    event_obj = self.bot.events.get(self.event_code)
+                    if event_obj:
+                        for t in event_obj.get("tasks", []):
+                            if t["task_id"] == self.task_id:
+                                if self.user_id not in t["checked_users"]:
+                                    t["checked_users"].append(self.user_id)
+                                break
                     await user.send(
-                        f"你的圖片 `{self.filename}` 審核通過+{points}點。\n活動：{event_name}"
+                        f"圖片 `{self.filename}` (任務ID={self.task_id}) 審核通過 +{points}點。\n活動：{event_name}"
                     )
                     await interaction.response.send_message(
-                        f"圖片 `{self.filename}` 審核通過 +{points}點。\n({result_msg})",
-                        ephemeral=True
+                        f"審核通過 `{self.filename}` (+{points}點)。\n({result_msg})", ephemeral=True
                     )
                     await self.disable_review(
-                        interaction,
-                        f"已通過(+{points}點), 活動:{event_name}"
+                        interaction, f"任務 {self.task_id} 審核：已通過(+{points}點)"
                     )
                     return
 
     async def disable_review(self, interaction: discord.Interaction, status: str):
         for c in self.view.children:
             c.disabled = True
-        await interaction.message.edit(content=f"圖片 `{self.filename}` 審核狀態：{status}", view=self.view)
-
+        await interaction.message.edit(
+            content=f"圖片 `{self.filename}` 審核狀態：{status}", 
+            view=self.view
+        )
 
 class ReviewView(View):
-    def __init__(self, bot: commands.Bot, user_id: int, filename: str, event_code: str):
+    """審核用 View"""
+    def __init__(self, bot: commands.Bot, user_id: int, filename: str, event_code: str, task_id: int):
         super().__init__(timeout=None)
         self.bot = bot
         self.user_id = user_id
         self.filename = filename
         self.event_code = event_code
-        self.add_item(ReviewSelect(bot, user_id, filename, event_code))
+        self.task_id = task_id
+        self.add_item(ReviewSelect(bot, user_id, filename, event_code, task_id))
+
+class TaskSelectForImage(discord.ui.Select):
+    """讓使用者在上傳時於私訊中選擇要上傳到哪個任務"""
+    def __init__(self, bot: commands.Bot, ctx: commands.Context, attachment: discord.Attachment, event_code: str):
+        self.bot = bot
+        self.ctx = ctx
+        self.attachment = attachment
+        self.event_code = event_code
+        event_obj = self.bot.events.get(self.event_code)
+        options = []
+        if event_obj and "tasks" in event_obj:
+            for t in event_obj["tasks"]:
+                # 若使用者已在 checked_users 中，則不允許重複上傳
+                if self.ctx.author.id in t["checked_users"]:
+                    continue
+                task_label = f"任務{t['task_id']}：{t['task_name']}"
+                options.append(discord.SelectOption(
+                    label=task_label,
+                    value=str(t['task_id'])
+                ))
+        super().__init__(
+            placeholder="選擇要上傳圖片的任務",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        chosen_task_id = int(self.values[0])
+        channel = self.bot.get_channel(TARGET_CHANNEL_ID)
+        if not channel:
+            await interaction.followup.send("找不到審核頻道，請通知管理員。", ephemeral=True)
+            return
+
+        event_obj = self.bot.events.get(self.event_code)
+        if not event_obj:
+            await interaction.followup.send("活動不存在，請通知管理員。", ephemeral=True)
+            return
+
+        for t in event_obj["tasks"]:
+            if t["task_id"] == chosen_task_id:
+                if self.ctx.author.id in t["checked_users"]:
+                    await interaction.followup.send("你已通過此任務，無法重複上傳。", ephemeral=True)
+                    return
+                # 加入 assigned_users 記錄（避免重複上傳）
+                if self.ctx.author.id not in t["assigned_users"]:
+                    t["assigned_users"].append(self.ctx.author.id)
+                break
+
+        event_name = event_obj["event_name"]
+        image_data = {
+            "filename": self.attachment.filename,
+            "user_id": self.ctx.author.id,
+            "username": self.ctx.author.name,
+            "status": "pending",
+            "event_code": self.event_code,
+            "task_id": chosen_task_id
+        }
+        self.bot.user_images.setdefault(self.ctx.author.id, []).append(image_data)
+
+        try:
+            file = await self.attachment.to_file()
+            view = ReviewView(
+                self.bot,
+                self.ctx.author.id,
+                self.attachment.filename,
+                self.event_code,
+                chosen_task_id
+            )
+            await channel.send(
+                content=(
+                    f"使用者 <@{self.ctx.author.id}> 上傳圖片：`{self.attachment.filename}`\n"
+                    f"活動：{event_name} (編號={self.event_code})\n"
+                    f"任務ID={chosen_task_id} 等待審核..."
+                ),
+                file=file,
+                view=view
+            )
+            await interaction.followup.send(
+                f"圖片 `{self.attachment.filename}` 已送出審核！(任務ID={chosen_task_id})", 
+                ephemeral=True
+            )
+        except Exception as e:
+            print(f"Error in TaskSelectForImage.callback: {e}")
+            await interaction.followup.send("上傳至審核頻道失敗，請通知管理員排除。", ephemeral=True)
+            return
+
+        for c in self.view.children:
+            c.disabled = True
+        await interaction.edit_original_response(view=self.view)
+
+class TaskSelectView(View):
+    """在私訊中顯示任務選單"""
+    def __init__(self, bot: commands.Bot, ctx: commands.Context, attachment: discord.Attachment, event_code: str):
+        super().__init__(timeout=120)
+        self.add_item(TaskSelectForImage(bot, ctx, attachment, event_code))
 
 class ImageReviewCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -114,41 +232,14 @@ class ImageReviewCog(commands.Cog):
             await ctx.send("限圖片檔 (.png/.jpg/.jpeg/.gif)")
             return
 
-        event_name = self.bot.events[event_code]["event_name"]
-        image_data = {
-            "filename": attachment.filename,
-            "user_id": ctx.author.id,
-            "username": ctx.author.name,
-            "status": "pending",
-            "event_code": event_code
-        }
-        self.bot.user_images.setdefault(ctx.author.id, []).append(image_data)
-
-        channel = self.bot.get_channel(TARGET_CHANNEL_ID)
-        if not channel:
-            await ctx.send("找不到審核頻道，請檢查 TARGET_CHANNEL_ID。")
-            return
-
-        try:
-            file = await attachment.to_file()
-            view = ReviewView(self.bot, ctx.author.id, attachment.filename, event_code)
-            msg = await channel.send(
-                content=(
-                    f"使用者 <@{ctx.author.id}> 上傳圖片檔案：`{attachment.filename}`\n"
-                    f"活動：{event_name} (編號={event_code})\n"
-                    "等待審核..."
-                ),
-                file=file,
-                view=view
-            )
-        except Exception:
-            await ctx.send("上傳至審核頻道失敗，請通知管理員排除。")
+        event_obj = self.bot.events[event_code]
+        if not event_obj.get("tasks"):
+            await ctx.send("該活動尚未有任務配置或任務為空。")
             return
 
         await ctx.send(
-            f"圖片 `{attachment.filename}` 已收到。\n"
-            f"活動：{event_name} (編號:{event_code})\n"
-            "等待管理員審核..."
+            "請選擇要上傳到哪個任務：",
+            view=TaskSelectView(self.bot, ctx, attachment, event_code)
         )
 
 async def setup(bot: commands.Bot):
