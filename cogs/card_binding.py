@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import re
 from main import save_data
+from datetime import datetime
 
 class CardBindingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -63,6 +64,16 @@ class CardBindingCog(commands.Cog):
             }
 
         event = self.bot.events[event_code]
+        try:
+            end_date = datetime.strptime(event["event_end_date"], "%Y-%m-%d").date()
+        except Exception as e:
+            return False, "活動結束日期格式錯誤"
+        today = datetime.utcnow().date()
+        if today > end_date:
+            event["historical"] = True
+            save_data()
+            return False, f"活動 {event_code} 已過期，無法參加"
+
         if user.id in event["gamer_list"]:
             return False, f"你已參加過此活動 {event_code}"
 

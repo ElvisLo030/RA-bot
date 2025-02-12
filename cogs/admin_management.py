@@ -3,10 +3,11 @@ from discord.ext import commands
 from discord.ui import View, Select, Modal, TextInput
 import re
 import os
-import asyncio  # 確保能捕捉 asyncio.TimeoutError
+import asyncio 
 from dotenv import load_dotenv
 from main import save_data
 from typing import Optional, List
+from datetime import datetime
 
 load_dotenv()
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
@@ -14,7 +15,6 @@ ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 def is_admin_channel(ctx):
     return ctx.channel.id == ADMIN_CHANNEL_ID
 
-# 建立活動 Modal（僅保留活動基本資料，共 5 個欄位）
 class CreateEventModal(Modal):
     def __init__(self, bot: commands.Bot):
         super().__init__(title="創建活動")
@@ -64,6 +64,18 @@ class CreateEventModal(Modal):
                 await interaction.followup.send("該活動編號已存在。", ephemeral=True)
                 return
 
+            # 驗證時間格式
+            try:
+                start_date = datetime.strptime(self.start_date.value.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(self.end_date.value.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                await interaction.followup.send("日期格式錯誤，應為 YYYY-MM-DD", ephemeral=True)
+                return
+            
+            if end_date < datetime.utcnow().date():
+                await interaction.followup.send("結束日期不能小於當前日期！", ephemeral=True)
+                return
+
             self.bot.events[code] = {
                 "event_code": code,
                 "event_name": self.event_name.value.strip(),
@@ -81,7 +93,7 @@ class CreateEventModal(Modal):
         except Exception as e:
             print("Error in CreateEventModal.on_submit:", e)
             await interaction.followup.send("建立活動時發生錯誤。", ephemeral=True)
-
+            
 # 新增任務 Modal（以表單方式建立任務，欄位：活動編號、任務名稱、任務給予的點數）
 class CreateTaskModal(Modal):
     def __init__(self, bot: commands.Bot):
@@ -98,6 +110,11 @@ class CreateTaskModal(Modal):
             placeholder="輸入任務名稱",
             max_length=50
         )
+        self.task_description = TextInput(
+            label="任務描述",
+            placeholder="輸入任務描述",
+            max_length=100
+        )
         self.task_points = TextInput(
             label="任務給予的點數",
             placeholder="輸入任務點數",
@@ -105,6 +122,7 @@ class CreateTaskModal(Modal):
         )
         self.add_item(self.event_code)
         self.add_item(self.task_name)
+        self.add_item(self.task_description)
         self.add_item(self.task_points)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -143,58 +161,6 @@ class CreateTaskModal(Modal):
             )
         except Exception as e:
             print("Error in CreateTaskModal.on_submit:", e)
-            await interaction.followup.send("新增任務時發生錯誤。", ephemeral=True)
-
-class AddTaskModal(Modal):
-    def __init__(self, bot: commands.Bot, event_code: str):
-        super().__init__(title="新增任務")
-        self.bot = bot
-        self.event_code = event_code
-
-        self.task_name = TextInput(
-            label="任務名稱",
-            placeholder="輸入任務名稱",
-            required=True
-        )
-        self.task_description = TextInput(
-            label="任務描述",
-            placeholder="輸入任務描述",
-            required=False
-        )
-
-        self.add_item(self.task_name)
-        self.add_item(self.task_description)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        try:
-            task_name = self.task_name.value.strip()
-            task_description = self.task_description.value.strip()
-            if not task_name:
-                await interaction.followup.send("任務名稱不能為空！", ephemeral=True)
-                return
-
-            if self.event_code not in self.bot.events:
-                await interaction.followup.send("活動不存在！", ephemeral=True)
-                return
-
-            tasks = self.bot.events[self.event_code].get("tasks", [])
-            new_id = len(tasks) + 1
-            tasks.append({
-                "task_id": new_id,
-                "task_name": task_name,
-                "task_description": task_description,
-                "assigned_users": [],
-                "checked_users": []
-            })
-            self.bot.events[self.event_code]["tasks"] = tasks
-            save_data()
-            await interaction.followup.send(
-                f"已新增任務 {task_name} 到活動 {self.event_code}。",
-                ephemeral=True
-            )
-        except Exception as e:
-            print("Error in AddTaskModal.on_submit:", e)
             await interaction.followup.send("新增任務時發生錯誤。", ephemeral=True)
 
 class ModifyCardModal(Modal):
@@ -381,13 +347,13 @@ class AdminManagementSelect(Select):
         self.bot = bot
         options = [
             discord.SelectOption(label="建立活動", value="create_event"),
+            discord.SelectOption(label="新增任務", description="新增任務到指定活動", value="add_task"),
+            discord.SelectOption(label="查詢玩家資料", description="請盡量以關鍵字查詢，若無輸入關鍵字會抓取所有資料", value="query_all_gamers"),
             discord.SelectOption(label="修改玩家卡號", description="請詢問使用者之DC ID編號，若無法查詢可使用查詢玩家ID功能", value="modify_card_modal"),
             discord.SelectOption(label="手動給予點數", description="請詢問使用者之DC ID編號，若無法查詢可使用查詢玩家ID功能", value="add_points_modal"),
             discord.SelectOption(label="查詢玩家卡號", description="請詢問使用者之DC ID編號，若無法查詢可使用查詢玩家ID功能", value="query_card_by_user"),
             discord.SelectOption(label="查詢玩家ID(卡號)", description="請詢問使用者卡片編號，若無法查詢可使用查詢玩家卡號功能", value="query_user_by_card"),
-            discord.SelectOption(label="查詢玩家資料", description="請盡量以關鍵字查詢，若無輸入關鍵字會抓取所有資料", value="query_all_gamers"),
-            discord.SelectOption(label="封鎖/解除封鎖玩家", value="block_unblock"),
-            discord.SelectOption(label="新增任務", description="新增任務到指定活動", value="add_task")
+            discord.SelectOption(label="封鎖/解除封鎖玩家", value="block_unblock")
         ]
         super().__init__(placeholder="選擇管理功能...", min_values=1, max_values=1, options=options)
 

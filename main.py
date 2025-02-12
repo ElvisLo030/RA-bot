@@ -14,16 +14,14 @@ from discord.ext.commands import CheckFailure
 from dotenv import load_dotenv
 from typing import Optional, List
 import secrets
+from datetime import datetime
 
 load_dotenv()
 
 import uvicorn
 import discord
 
-# ----------------------------
-# Discord Bot 初始化
-# ----------------------------
-intents = discord.Intents.default()
+intents = discord.Intents.all()
 intents.messages = True
 intents.guilds = True
 intents.message_content = True
@@ -40,7 +38,6 @@ def load_data():
                 data = json.load(f)
                 bot.user_images = data.get("user_images", {})
                 bot.events = data.get("events", {})
-                # 將 gamers 的 key 轉回 int
                 raw_gamers = data.get("gamers", {})
                 bot.gamers = {int(k): v for k, v in raw_gamers.items()}
                 print("DEBUG: 成功載入 JSON 資料")
@@ -78,7 +75,6 @@ bot.user_images = {}
 bot.events = {}
 bot.gamers = {}
 
-# 以下函式更新資料時，不再推送任何 log 訊息
 def add_points_internal(gamer_id: int, points: int) -> str:
     if gamer_id not in bot.gamers:
         bot.gamers[gamer_id] = {
@@ -125,13 +121,9 @@ async def lifespan(app: FastAPI):
     app.state.bot = bot
     yield
 
-# ----------------------------
-# FastAPI 應用與 Dashboard 設定
-# ----------------------------
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 
-# HTTP Basic 認證設定
 security = HTTPBasic()
 def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
     correct_username = os.getenv("DASHBOARD_USERNAME")
@@ -146,7 +138,6 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
-# Pydantic 模型
 class EventData(BaseModel):
     event_code: str
     event_name: str
@@ -177,6 +168,12 @@ def create_event(data: EventData):
     print(f"DEBUG: create_event API called with data={data}")
     if data.event_code in bot.events:
         raise HTTPException(status_code=400, detail="活動編號已存在")
+    try:
+        start_date = datetime.strptime(data.event_start_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(data.event_end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式錯誤，應為 YYYY-MM-DD")
+    
     bot.events[data.event_code] = {
         "event_code": data.event_code,
         "event_name": data.event_name,
@@ -266,7 +263,6 @@ def get_gamer_by_card(card_number: str):
             return data
     raise HTTPException(status_code=404, detail="Player with this card number not found")
 
-# 新增任務 API（包含 task_points 欄位）
 @app.post("/event/{event_code}/task")
 def add_task_to_event(event_code: str, task_name: str, task_description: str = "", task_points: int = 0):
     if event_code not in bot.events:
@@ -285,7 +281,6 @@ def add_task_to_event(event_code: str, task_name: str, task_description: str = "
     save_data()
     return {"message": f"已新增任務 {task_name} (點數：{task_points}) 到活動 {event_code}"}
 
-# 新增任務細節檢視功能
 @app.get("/task/{event_code}/{task_id}", response_class=HTMLResponse)
 def task_detail(request: Request, event_code: str, task_id: int, username: str = Depends(get_current_username)):
     if event_code not in bot.events:
@@ -303,7 +298,6 @@ def task_detail(request: Request, event_code: str, task_id: int, username: str =
         "task": task
     })
 
-# Dashboard 頁面（需通過 HTTP Basic 認證）
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, username: str = Depends(get_current_username)):
     status = "機器人運作中"
@@ -316,19 +310,10 @@ def dashboard(request: Request, username: str = Depends(get_current_username)):
         "debug": debug_info
     })
 
-# ----------------------------
-# 移除所有 log 功能，故不再建立任何 SSE log或資料更新推播功能
-# ----------------------------
-
-# ----------------------------
-# 同時啟動 Discord Bot 與 FastAPI 網站
-# ----------------------------
 if __name__ == "__main__":
-    # 建立新的事件迴圈並設定為當前事件迴圈
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    global_loop = loop  # 設定全域事件迴圈
-    # 移除 log_queue 與 data_update_queue 初始化，因不再推播 log 資料
+    global_loop = loop  
     loop.create_task(start_bot())
     config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
     server = uvicorn.Server(config)

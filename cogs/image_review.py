@@ -14,7 +14,6 @@ class ReviewSelect(discord.ui.Select):
         self.filename = filename
         self.event_code = event_code
         self.task_id = task_id
-        # 從任務資料中取得該任務應給予的點數，預設為 0
         task_points = 0
         event_obj = self.bot.events.get(event_code)
         if event_obj:
@@ -60,7 +59,6 @@ class ReviewSelect(discord.ui.Select):
                         result_msg = self.bot.add_points_internal(self.user_id, points)
                     except AttributeError:
                         result_msg = "bot 未定義 add_points_internal"
-                    # 更新 checked_users：將該使用者記錄到該任務的 checked_users 中
                     event_obj = self.bot.events.get(self.event_code)
                     if event_obj:
                         for t in event_obj.get("tasks", []):
@@ -88,7 +86,6 @@ class ReviewSelect(discord.ui.Select):
         )
 
 class ReviewView(View):
-    """審核用 View"""
     def __init__(self, bot: commands.Bot, user_id: int, filename: str, event_code: str, task_id: int):
         super().__init__(timeout=None)
         self.bot = bot
@@ -99,7 +96,6 @@ class ReviewView(View):
         self.add_item(ReviewSelect(bot, user_id, filename, event_code, task_id))
 
 class TaskSelectForImage(discord.ui.Select):
-    """讓使用者在上傳時於私訊中選擇要上傳到哪個任務"""
     def __init__(self, bot: commands.Bot, ctx: commands.Context, attachment: discord.Attachment, event_code: str):
         self.bot = bot
         self.ctx = ctx
@@ -109,9 +105,6 @@ class TaskSelectForImage(discord.ui.Select):
         options = []
         if event_obj and "tasks" in event_obj:
             for t in event_obj["tasks"]:
-                # 若使用者已在 checked_users 中，則不允許重複上傳
-                if self.ctx.author.id in t["checked_users"]:
-                    continue
                 task_label = f"任務{t['task_id']}：{t['task_name']}"
                 options.append(discord.SelectOption(
                     label=task_label,
@@ -123,8 +116,13 @@ class TaskSelectForImage(discord.ui.Select):
             max_values=1,
             options=options
         )
+        self.error_message = None
 
     async def callback(self, interaction: discord.Interaction):
+        if self.error_message:
+            await interaction.response.send_message(self.error_message, ephemeral=True)
+            return
+
         await interaction.response.defer(ephemeral=True)
         chosen_task_id = int(self.values[0])
         channel = self.bot.get_channel(TARGET_CHANNEL_ID)
@@ -142,7 +140,6 @@ class TaskSelectForImage(discord.ui.Select):
                 if self.ctx.author.id in t["checked_users"]:
                     await interaction.followup.send("你已通過此任務，無法重複上傳。", ephemeral=True)
                     return
-                # 加入 assigned_users 記錄（避免重複上傳）
                 if self.ctx.author.id not in t["assigned_users"]:
                     t["assigned_users"].append(self.ctx.author.id)
                 break
@@ -190,7 +187,6 @@ class TaskSelectForImage(discord.ui.Select):
         await interaction.edit_original_response(view=self.view)
 
 class TaskSelectView(View):
-    """在私訊中顯示任務選單"""
     def __init__(self, bot: commands.Bot, ctx: commands.Context, attachment: discord.Attachment, event_code: str):
         super().__init__(timeout=120)
         self.add_item(TaskSelectForImage(bot, ctx, attachment, event_code))

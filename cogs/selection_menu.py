@@ -29,7 +29,7 @@ class JoinEventModal(Modal):
         self.cog = cog
         self.event_code = TextInput(
             label="活動編號",
-            placeholder="RGE000",
+            placeholder="RAE000",
             max_length=6
         )
         self.add_item(self.event_code)
