@@ -3,6 +3,7 @@ from discord.ext import commands
 import re
 from main import save_data
 from datetime import datetime
+from datetime import datetime, timedelta
 
 class CardBindingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -32,7 +33,7 @@ class CardBindingCog(commands.Cog):
         else:
             self.bot.gamers[user.id]["gamer_card_number"] = card_number
 
-        save_data()  # 確保每次更新資料後都呼叫 save_data()
+        save_data()
         return True, f"你的卡號 {card_number} 綁定成功！"
 
     async def query_card(self, user: discord.User):
@@ -46,7 +47,6 @@ class CardBindingCog(commands.Cog):
 
     async def join_event(self, user: discord.User, event_code: str):
         print(f"DEBUG: join_event => user={user.id}, event_code={event_code}")
-        print(f"DEBUG: bot.events.keys()={self.bot.events.keys()}")
         if event_code not in self.bot.events:
             print("DEBUG: 該活動編號不存在")
             return False, f"活動 {event_code} 不存在"
@@ -68,7 +68,7 @@ class CardBindingCog(commands.Cog):
             end_date = datetime.strptime(event["event_end_date"], "%Y-%m-%d").date()
         except Exception as e:
             return False, "活動結束日期格式錯誤"
-        today = datetime.utcnow().date()
+        today = (datetime.utcnow() + timedelta(hours=8)).date()
         if today > end_date:
             event["historical"] = True
             save_data()
@@ -80,8 +80,10 @@ class CardBindingCog(commands.Cog):
         event["gamer_list"].append(user.id)
         self.bot.gamers[user.id].setdefault("joined_events", [])
         self.bot.gamers[user.id]["joined_events"].append(event_code)
+        self.bot.gamers[user.id].setdefault("joined_event_timestamps", {})
+        self.bot.gamers[user.id]["joined_event_timestamps"][event_code] = (datetime.utcnow() + timedelta(hours=8)).isoformat()
 
-        save_data()  # 確保每次更新資料後都呼叫 save_data()
+        save_data()
         return True, f"你已成功參加活動 {event_code}"
 
     async def update_menu(self, user: discord.User):
