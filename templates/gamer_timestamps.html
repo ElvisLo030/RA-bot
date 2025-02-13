@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>玩家 {{ gamer_id }} - 時間戳記列表</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #eee; }
+    </style>
+</head>
+<body>
+    <h1>玩家 {{ gamer_id }} - 時間戳記列表</h1>
+
+    {% if all_records %}
+      <table>
+        <thead>
+          <tr>
+            <th>時間</th>
+            <th>內容</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in all_records %}
+          <tr>
+            <td>{{ r.timestamp }}</td>
+            <td>{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>尚無任何時間戳記紀錄</p>
+    {% endif %}
+
+    <p><a href="/dashboard">返回 Dashboard</a></p>
+</body>
+</html>

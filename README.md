@@ -1,28 +1,9 @@
 <h1 align="center">RA DCbot</h1>
 
-## 開發進度
-- 1140114  
-  - 基礎照片審核功能  
-- 1140115  
-  - 新增按鈕審核功能＋自動私訊回覆結果  
-- 1140118  
-  - 新增卡片綁定介面  
-- 1140121  
-  - 使用 `fastapi` 進行簡單的 API 測試  
-  - 新增簡易投票系統  
-- 1140128  
-  - 將審核頻道 ID 導入 `.env`  
-- 1140203  
-  - 新增積點、活動、任務功能
-  - 刪除投票功能
-- 1140205
-  - **修改程式框架和細部內容**
-
 ## 安裝模組
 ```bash
 pip install -r requirements.txt
 ```
-執行上述指令以安裝此專案所需的 Python 套件
 
 ## DC BOT 設定
 1.	在專案目錄內新增`.env`檔案
@@ -31,17 +12,25 @@ pip install -r requirements.txt
 DISCORD_TOKEN=YOUR_DISCORD_TOKEN
 TARGET_CHANNEL_ID=YOUR_CHANNEL_ID #用於圖片審核的頻道ID
 ADMIN_CHANNEL_ID=YOUR_CHANNEL_ID #後台管理的頻道ID
+DASHBOARD_USERNAME=YOUR_USERNAME #後台網頁之使用者名稱
+DASHBOARD_PASSWORD=YOUR_PASSWORD #後台網頁之密碼
 ```
+
 ## 功能簡介
-### 相關指令：
+### 相關指令與功能：
+  - 前綴指令：`RA` 
   - `RA 功能選單`
     - 在私訊內輸入可呼叫功能選單
+    - 綁定卡片、參加活動/任務、上傳圖片
   - `RA 後台管理`
     - 後台管理員指令，在 ADMIN_CHANNEL_ID 指定的頻道中使用
+    - 建立活動/任物、查詢/修改玩家資料、封鎖玩家
 
-### FastAPI 後端 API
+### API和後台介面
 ---
-使用 FastAPI 作為後端 API，可在本地端啟動後，透過 http://localhost:8080 存取目前已架設的路由
+使用 FastAPI 在本地端啟動後，透過 http://localhost:8080 存取API
+
+或可以使用 http://localhost:8080/dashboard 查看後台網頁
 1. GET/
 - 根路由，回傳簡單的歡迎訊息
 2. /images
@@ -61,7 +50,8 @@ ADMIN_CHANNEL_ID=YOUR_CHANNEL_ID #後台管理的頻道ID
 - PUT/gamer/{gamer_id}/points: 增加指定玩家點數
 - PUT/gamer/{gamer_id}/card: 更新玩家卡號
 ---
-### 目前版本：0.0.7 beta
+### 目前版本：0.11 beta
+### 最後更新日期：1140213
 ### support by elvislo 
 
 
