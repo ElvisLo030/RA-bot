@@ -171,26 +171,16 @@ async def start_bot():
                 break
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan_api(app: FastAPI):
     app.state.bot = bot
     yield
 
-app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="templates")
+# api 
+app_api = FastAPI(lifespan=lifespan_api)
 
-security = HTTPBasic()
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = os.getenv("DASHBOARD_USERNAME")
-    correct_password = os.getenv("DASHBOARD_PASSWORD")
-    is_valid_username = secrets.compare_digest(credentials.username, correct_username)
-    is_valid_password = secrets.compare_digest(credentials.password, correct_password)
-    if not (is_valid_username and is_valid_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="驗證失敗，請檢查帳號密碼",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+@app_api.get("/")
+def read_root_api():
+    return {"message": "這是API系統(只綁定localhost)"}
 
 class EventData(BaseModel):
     event_code: str
@@ -212,12 +202,8 @@ class GamerData(BaseModel):
     gamer_is_blocked: bool = False
     gamer_bind_gamepass: str = None
 
-@app.get("/")
-def read_root():
-    return {"message": "歡迎使用 RA 機器人 API"}
-
-@app.post("/event")
-def create_event(data: EventData):
+@app_api.post("/event")  
+def create_event_api(data: EventData):
     if data.event_code in bot.events:
         raise HTTPException(status_code=400, detail="活動編號已存在")
     try:
@@ -254,34 +240,34 @@ def create_event(data: EventData):
     save_data()
     return {"event_code": data.event_code, "message": "活動已建立"}
 
-@app.get("/event")
-def get_events():
+@app_api.get("/event")
+def get_events_api():
     return list(bot.events.values())
 
-@app.get("/event/{event_code}")
-def get_event(event_code: str):
+@app_api.get("/event/{event_code}")
+def get_event_api(event_code: str):
     if event_code not in bot.events:
         raise HTTPException(status_code=404, detail="Event not found")
     return bot.events[event_code]
 
-@app.put("/event")
-def reset_events():
+@app_api.put("/event")
+def reset_events_api():
     bot.events.clear()
     save_data()
     return {"message": "All events reset"}
 
-@app.get("/gamer")
-def get_all_gamers():
+@app_api.get("/gamer")
+def get_all_gamers_api():
     return list(bot.gamers.values())
 
-@app.get("/gamer/{gamer_id}")
-def get_gamer_data(gamer_id: int):
+@app_api.get("/gamer/{gamer_id}")
+def get_gamer_data_api(gamer_id: int):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
     return bot.gamers[gamer_id]
 
-@app.post("/gamer")
-def create_gamer(data: GamerData):
+@app_api.post("/gamer")
+def create_gamer_api(data: GamerData):
     new_id = len(bot.gamers) + 1
     bot.gamers[new_id] = {
         "gamer_id": new_id,
@@ -296,7 +282,7 @@ def create_gamer(data: GamerData):
     save_data()
     return {"gamer_id": new_id, "message": f"玩家 {new_id} 已建立"}
 
-@app.put("/gamer/{gamer_id}/points")
+@app_api.put("/gamer/{gamer_id}/points")
 def add_points_to_gamer_api(gamer_id: int, points: int):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
@@ -310,23 +296,23 @@ def add_points_to_gamer_api(gamer_id: int, points: int):
     save_data()
     return {"message": f"已為玩家 {gamer_id} 增加 {points} 點"}
 
-@app.put("/gamer/{gamer_id}/card")
-def update_gamer_card(gamer_id: int, new_card_number: str):
+@app_api.put("/gamer/{gamer_id}/card")
+def update_gamer_card_api(gamer_id: int, new_card_number: str):
     if gamer_id not in bot.gamers:
         raise HTTPException(status_code=404, detail="Gamer not found")
     bot.gamers[gamer_id]["gamer_card_number"] = new_card_number
     save_data()
     return {"message": f"玩家 {gamer_id} 的卡號已更新為 {new_card_number}"}
 
-@app.get("/gamer/card/{card_number}")
-def get_gamer_by_card(card_number: str):
+@app_api.get("/gamer/card/{card_number}")
+def get_gamer_by_card_api(card_number: str):
     for g_id, data in bot.gamers.items():
         if data.get("gamer_card_number") == card_number:
             return data
     raise HTTPException(status_code=404, detail="Player with this card number not found")
 
-@app.post("/event/{event_code}/task")
-def add_task_to_event(event_code: str, task_name: str, task_description: str = "", task_points: int = 0):
+@app_api.post("/event/{event_code}/task")
+def add_task_to_event_api(event_code: str, task_name: str, task_description: str = "", task_points: int = 0):
     if event_code not in bot.events:
         raise HTTPException(status_code=404, detail="Event not found")
     tasks = bot.events[event_code].get("tasks", [])
@@ -344,7 +330,42 @@ def add_task_to_event(event_code: str, task_name: str, task_description: str = "
     save_data()
     return {"message": f"已新增任務 {task_name} (點數：{task_points}) 到活動 {event_code}"}
 
-@app.get("/task/{event_code}/{task_id}", response_class=HTMLResponse)
+# dashboard 
+@asynccontextmanager
+async def lifespan_dashboard(app: FastAPI):
+    app.state.bot = bot
+    yield
+
+app_dashboard = FastAPI(lifespan=lifespan_dashboard)
+templates = Jinja2Templates(directory="templates")
+
+security = HTTPBasic()
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = os.getenv("DASHBOARD_USERNAME")
+    correct_password = os.getenv("DASHBOARD_PASSWORD")
+    is_valid_username = secrets.compare_digest(credentials.username, correct_username)
+    is_valid_password = secrets.compare_digest(credentials.password, correct_password)
+    if not (is_valid_username and is_valid_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="驗證失敗，請檢查帳號密碼",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+@app_dashboard.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request, username: str = Depends(get_current_username)):
+    status = "機器人運作中"
+    debug_info = "資料載入成功"
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "events": bot.events,
+        "gamers": bot.gamers,
+        "status": status,
+        "debug": debug_info
+    })
+
+@app_dashboard.get("/task/{event_code}/{task_id}", response_class=HTMLResponse)
 def task_detail(request: Request, event_code: str, task_id: int, username: str = Depends(get_current_username)):
     if event_code not in bot.events:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -361,19 +382,18 @@ def task_detail(request: Request, event_code: str, task_id: int, username: str =
         "task": task
     })
 
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, username: str = Depends(get_current_username)):
-    status = "機器人運作中"
-    debug_info = "DEBUG: 資料載入成功"
-    return templates.TemplateResponse("dashboard.html", {
+@app_dashboard.get("/dashboard/event/{event_code}", response_class=HTMLResponse)
+def dashboard_event_detail(request: Request, event_code: str, username: str = Depends(get_current_username)):
+    if event_code not in bot.events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    event = bot.events[event_code]
+    return templates.TemplateResponse("event_tasks_detail.html", {
         "request": request,
-        "events": bot.events,
-        "gamers": bot.gamers,
-        "status": status,
-        "debug": debug_info
+        "event_code": event_code,
+        "event": event
     })
 
-@app.get("/gamer/{gamer_id}/event/{event_code}", response_class=HTMLResponse)
+@app_dashboard.get("/gamer/{gamer_id}/event/{event_code}", response_class=HTMLResponse)
 def user_event_detail(request: Request, 
                       gamer_id: int, 
                       event_code: str, 
@@ -397,24 +417,11 @@ def user_event_detail(request: Request,
         "gamer": gamer
     })
 
-@app.get("/dashboard/event/{event_code}", response_class=HTMLResponse)
-def dashboard_event_detail(request: Request, event_code: str, username: str = Depends(get_current_username)):
-    if event_code not in bot.events:
-        raise HTTPException(status_code=404, detail="Event not found")
-    # 取出 event 資料
-    event = bot.events[event_code]
-    return templates.TemplateResponse("event_tasks_detail.html", {
-        "request": request,
-        "event_code": event_code,
-        "event": event
-    })
-
-@app.get("/gamer/{gamer_id}/timestamps", response_class=HTMLResponse)
+@app_dashboard.get("/gamer/{gamer_id}/timestamps", response_class=HTMLResponse)
 def gamer_timestamps(request: Request, gamer_id: int, username: str = Depends(get_current_username)):
     user_data = bot.gamers.get(gamer_id)
     if not user_data:
         raise HTTPException(status_code=404, detail="Gamer not found")
-    from datetime import datetime
     def parse_iso(s):
         try:
             return datetime.fromisoformat(s)
@@ -480,7 +487,15 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
     global_loop = loop  
     loop.create_task(start_bot())
-    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
-    server = uvicorn.Server(config)
-    loop.create_task(server.serve())
+
+    # API只給本機用
+    config_api = uvicorn.Config(app_api, host="0.0.0.0", port=8050, log_level="info")
+    server_api = uvicorn.Server(config_api)
+    loop.create_task(server_api.serve())
+
+    # Dashboard對外
+    config_dash = uvicorn.Config(app_dashboard, host="127.0.0.1", port=8080, log_level="info")
+    server_dash = uvicorn.Server(config_dash)
+    loop.create_task(server_dash.serve())
+
     loop.run_forever()
