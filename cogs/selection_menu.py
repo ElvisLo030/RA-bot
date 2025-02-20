@@ -64,7 +64,6 @@ class JoinedEventsSelect(discord.ui.Select):
             options=options
         )
 
-    # 還沒加顯示開始和結束時間的功能
     async def callback(self, interaction: discord.Interaction):
         ev_code = self.values[0]
         event_obj = self.bot.events.get(ev_code, {})
@@ -72,7 +71,8 @@ class JoinedEventsSelect(discord.ui.Select):
         event_desc = event_obj.get("event_description", "無描述")
         event_tasks = event_obj.get("tasks", [])
         max_points = event_obj.get("max_points", 0)
-
+        event_start_date = event_obj.get("event_start_date", "未知開始日期")
+        event_end_date = event_obj.get("event_end_date", "未知結束日期")
         user_data = self.bot.gamers.get(self.user_id, {})
         user_points = user_data.get("events_points", {}).get(ev_code, 0)
 
@@ -80,11 +80,12 @@ class JoinedEventsSelect(discord.ui.Select):
         for t in event_tasks:
             t_name = t.get("task_name", "未命名任務")
             t_points = t.get("task_points", 0)
-            tasks_info += f"- 任務{t_name}可獲得{t_points}點\n"
-
+            tasks_info += f"- 任務：{t_name}可獲得{t_points}點\n"
         msg = (
             f"**活動名稱：**{event_name}\n"
-            f"**活動描述：**{event_desc}\n\n"
+            f"**活動描述：**{event_desc}\n"
+            f"**開始日期：**{event_start_date}\n"
+            f"**結束日期：**{event_end_date}\n\n"
             f"**任務清單：**\n{tasks_info if tasks_info else '無任務資訊'}\n"
             f"**最多可以獲得：**{max_points}點\n"
             f"**在此活動目前累積的點數：**{user_points}點"
@@ -189,16 +190,16 @@ class SelectionMenuSelect(discord.ui.Select):
             await interaction.response.send_message(msg, ephemeral=True)
         elif choice == "upload_pic":
             await interaction.response.send_message(
-                "請在私訊輸入 `RA 上傳圖片 RAEXXX` 並附加圖片。",
+                "請在私訊輸入 `RA 上傳圖片 RAEXXX` (XXX=活動編號）並附加圖片。",
                 ephemeral=True
             )
         elif choice == "check_joined_events":
             user_data = self.bot.gamers.get(self.user.id, {})
-            joined_events = user_data.get("joined_events", [])
-            if not joined_events:
+            joined = user_data.get("joined_events", [])
+            if not joined:
                 await interaction.response.send_message("你目前尚未參加任何活動。", ephemeral=True)
                 return
-            view = JoinedEventsView(self.bot, joined_events, self.user.id)
+            view = JoinedEventsView(self.bot, joined, self.user.id)
             await interaction.response.send_message("請選擇要查詢的活動：", view=view, ephemeral=True)
         elif choice == "query_timestamps":
             user_data = self.bot.gamers.get(self.user.id, {})
