@@ -4,15 +4,68 @@
     <meta charset="UTF-8">
     <title>任務細節 - {{ task.task_name }}</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #eee; }
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: #eee;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+            width: 200px; /* 顯示固定寬度 */
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        a:hover {
+            color: #0b7dda;
+            text-decoration: underline;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
+<div class="container">
     <h1>任務細節 - {{ task.task_name }}</h1>
-    <p>活動編號：{{ event_code }}</p>
+    <p>活動編號：<strong>{{ event_code }}</strong></p>
     <table>
         <tr>
             <th>任務 ID</th>
@@ -32,13 +85,28 @@
         </tr>
         <tr>
             <th>參加的使用者</th>
-            <td>{{ task.assigned_users | join(', ') }}</td>
+            <td>
+              {% if task.assigned_users %}
+                {{ task.assigned_users | join(', ') }}
+              {% else %}
+                (無)
+              {% endif %}
+            </td>
         </tr>
         <tr>
             <th>已通過審核的使用者</th>
-            <td>{{ task.checked_users | join(', ') }}</td>
+            <td>
+              {% if task.checked_users %}
+                {{ task.checked_users | join(', ') }}
+              {% else %}
+                (無)
+              {% endif %}
+            </td>
         </tr>
     </table>
-    <a href="/dashboard">返回 Dashboard</a>
+    <p class="back-link">
+      <a href="/dashboard">返回 Dashboard</a>
+    </p>
+</div>
 </body>
 </html>

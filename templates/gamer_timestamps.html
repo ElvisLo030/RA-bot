@@ -4,13 +4,65 @@
     <meta charset="UTF-8">
     <title>玩家 {{ gamer_id }} - 時間戳記列表</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #eee; }
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #eee;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        a:hover {
+            color: #0b7dda;
+            text-decoration: underline;
+        }
+
+        .no-records {
+            margin: 10px 0;
+            color: #555;
+        }
     </style>
 </head>
 <body>
+<div class="container">
     <h1>玩家 {{ gamer_id }} - 時間戳記列表</h1>
 
     {% if all_records %}
@@ -31,9 +83,10 @@
         </tbody>
       </table>
     {% else %}
-      <p>尚無任何時間戳記紀錄</p>
+      <p class="no-records">尚無任何時間戳記紀錄</p>
     {% endif %}
 
     <p><a href="/dashboard">返回 Dashboard</a></p>
+</div>
 </body>
 </html>

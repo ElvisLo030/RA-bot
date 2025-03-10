@@ -4,18 +4,101 @@
     <meta charset="UTF-8">
     <title>玩家 {{ gamer_id }} 在活動 {{ event_code }} 詳細資訊</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #eee; }
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1, h2 {
+            font-weight: 600;
+            color: #333;
+        }
+
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 4px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: #eee;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        button {
+            padding: 6px 10px;
+            background-color: #2196F3;
+            border: none;
+            border-radius: 3px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976D2;
+        }
+
+        a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        a:hover {
+            color: #0b7dda;
+            text-decoration: underline;
+        }
+
+        .section-info {
+            margin: 8px 0;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .section-info strong {
+            color: #555;
+        }
+        .prize-section {
+            margin-top: 30px;
+        }
     </style>
 </head>
 <body>
+<div class="container">
     <h1>玩家 {{ gamer_id }} 在活動 {{ event_code }} 詳細資訊</h1>
-    <p>活動名稱：{{ event.event_name }}</p>
-    <p>活動描述：{{ event.event_description }}</p>
-    <p>玩家在此活動目前累積點數：{{ user_points }}</p>
 
+    <div class="section-info">
+      <p><strong>活動名稱：</strong>{{ event.event_name }}</p>
+      <p><strong>活動描述：</strong>{{ event.event_description }}</p>
+      <p><strong>玩家在此活動目前累積點數：</strong>{{ user_points }}</p>
+    </div>
+
+    <!-- ======= 活動任務列表 ======= -->
     <h2>活動任務列表</h2>
     {% if tasks %}
     <table>
@@ -25,7 +108,7 @@
                 <th>任務名稱</th>
                 <th>任務描述</th>
                 <th>任務點數</th>
-                <th>審核紀錄</th> <!-- 取代 Assigned/Checked -->
+                <th>審核紀錄</th>
             </tr>
         </thead>
         <tbody>
@@ -38,7 +121,6 @@
                 <td>{{ t.task_description }}</td>
                 <td>{{ t.task_points }}</td>
                 <td>
-                    <!-- 對所有 assigned_users 逐一顯示 -->
                     {% if assigned_list %}
                         {% for uid in assigned_list %}
                             <div>
@@ -62,6 +144,72 @@
         <p>此活動尚未配置任務</p>
     {% endif %}
 
-    <p><a href="/dashboard">返回 Dashboard</a></p>
+    <!-- ======= 活動獎品列表 (管理員可執行兌換) ======= -->
+    <h2 class="prize-section">活動獎品列表</h2>
+    {% if event.prizes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>獎品 ID</th>
+                    <th>獎品名稱</th>
+                    <th>所需點數</th>
+                    <th>兌換狀態</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set user_redeemed = gamer.redeemed_prizes.get(event_code, []) if gamer.redeemed_prizes else [] %}
+                {% for p in event.prizes %}
+                <tr>
+                    <td>{{ p.prize_id }}</td>
+                    <td>{{ p.prize_name }}</td>
+                    <td>{{ p.points_required }}</td>
+                    <td>
+                        {% if p.prize_id in user_redeemed %}
+                            <span style="color: green;">已兌換</span>
+                        {% else %}
+                            <button onclick="adminRedeem('{{ gamer_id }}', '{{ event_code }}', '{{ p.prize_id }}')">
+                                執行兌換
+                            </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>此活動尚未配置任何獎品</p>
+    {% endif %}
+
+    <p style="margin-top:20px;"><a href="/dashboard">返回 Dashboard</a></p>
+</div>
+
+<script>
+    // 假設後端 API 與 Dashboard 共用相同網域與埠 => "/api"
+    const API_BASE = "/api";
+    
+    async function adminRedeem(gamerId, eventCode, prizeId) {
+      // 調用後端 "/api/gamer/{gamerId}/redeem_prize?event_code=..."
+      try {
+        const url = `${API_BASE}/gamer/${gamerId}/redeem_prize?event_code=${encodeURIComponent(eventCode)}`;
+        const resp = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prize_id: parseInt(prizeId, 10) })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          alert("兌換失敗: " + err.detail);
+          return;
+        }
+        const data = await resp.json();
+        alert("兌換成功: " + data.message);
+    
+        // 重新載入頁面，顯示最新兌換狀態
+        location.reload();
+      } catch (e) {
+        alert("呼叫API時發生錯誤: " + e);
+      }
+    }
+    </script>
 </body>
 </html>

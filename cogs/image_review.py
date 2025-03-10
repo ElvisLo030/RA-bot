@@ -163,6 +163,7 @@ class TaskSelectForImage(discord.ui.Select):
             return
 
         await interaction.response.defer(ephemeral=True)
+        await interaction.edit_original_response(content="上傳中，請勿離開頁或選擇其他活動")
         chosen_task_id = int(self.values[0])
         channel = self.bot.get_channel(TARGET_CHANNEL_ID)
         if not channel:

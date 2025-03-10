@@ -4,170 +4,345 @@
     <meta charset="UTF-8">
     <title>RA DCBot Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1, h2, h3 { color: #333; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #eee; cursor: pointer; }
-        .hidden { display: none; }
-        .search-bar { margin-bottom: 10px; }
+        /* ========== 全域樣式 ========== */
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            color: #333;
+            background-color: #f9f9f9;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        h1, h2, h3 {
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        a:hover {
+            color: #0b7dda;
+            text-decoration: underline;
+        }
+
+        /* ========== 深色模式樣式 ========== */
+        .dark-mode {
+            background-color: #212121;
+            color: #ccc;
+        }
+        .dark-mode table {
+            background-color: #2c2c2c;
+        }
+        .dark-mode th {
+            background-color: #3a3a3a;
+            color: #ccc;
+        }
+        .dark-mode td {
+            background-color: #2c2c2c;
+            color: #ccc;
+        }
+        .dark-mode .search-input {
+            background-color: #3a3a3a;
+            color: #ccc;
+            border-color: #555;
+        }
+        .dark-mode h1, 
+        .dark-mode h2, 
+        .dark-mode h3 {
+            color: #fff;
+        }
+        .dark-mode .status-info {
+            background-color: #1b2e3f;
+            border-left: 4px solid #114b7a;
+            color: #ffffff;
+        }
+
+        /* ========== 容器與排版 ========== */
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* ========== 右上角按鈕區塊 ========== */
+        .top-actions {
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        .top-actions button {
+            margin-left: 8px;
+            padding: 6px 10px;
+            background-color: #666;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .top-actions button:hover {
+            background-color: #444;
+        }
+
+        /* ========== 狀態資訊區塊 ========== */
+        .status-info {
+            margin: 8px 0;
+            padding: 8px 12px;
+            background-color: #e7f3fe;
+            border-left: 4px solid #2196F3;
+            color: #333;
+        }
+
+        /* ========== 區段標題樣式 ========== */
+        .section-title {
+            margin-top: 30px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 4px;
+            font-size: 1.2rem;
+        }
+
+        /* ========== 表格樣式 ========== */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: #eee;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* ========== 搜尋框樣式 ========== */
+        .search-bar {
+            margin-bottom: 12px;
+        }
         .search-input {
-            padding: 5px;
+            padding: 8px;
             font-size: 14px;
             width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #888;
+        }
+
+        /* ========== 任務列表切換區 ========== */
+        #task-list-section button {
+            margin-top: 10px;
+            padding: 6px 12px;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #task-list-section button:hover {
+            background-color: #45a049;
+        }
+
+        #events-table button {
+            padding: 6px 10px;
+            background-color: #2196F3;
+            border: none;
+            border-radius: 3px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        #events-table button:hover {
+            background-color: #1976D2;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>RA DCBot Dashboard</h1>
-    <p>狀態：{{ status }}</p>
-    <p>{{ debug }}</p>
+    <div class="container">
+        <!-- 右上角三個按鈕 -->
+        <div class="top-actions">
+            <button onclick="toggleDarkMode()">切換深色模式</button>
+            <button onclick="location.href='/dashboard/management'">活動內容管理</button>
+        </div>
 
-    <!-- ===================== 活動列表 ===================== -->
-    <h2>活動列表</h2>
-    <div class="search-bar">
-      <input 
-        type="text" 
-        class="search-input" 
-        id="eventSearchInput" 
-        placeholder="搜尋活動 (編號、名稱、描述等...)"
-        onkeyup="searchEvents()" />
-    </div>
-    <div id="events-container">
-        <table id="events-table">
+        <h1>RA Bot Dashboard</h1>
+        <div class="status-info">
+            <p>機器人狀態：<strong>{{ status }}</strong></p>
+            <p>資料庫狀態：<strong>{{ debug }}</strong></p>
+        </div>
+
+        <!-- ===================== 活動列表 ===================== -->
+        <h2 class="section-title">活動列表</h2>
+        <div class="search-bar">
+          <input 
+            type="text" 
+            class="search-input" 
+            id="eventSearchInput" 
+            placeholder="搜尋活動(編號、名稱、描述...)"
+            onkeyup="searchEvents()" />
+        </div>
+        <div id="events-container">
+            <table id="events-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('events-table', 0)">活動編號</th>
+                        <th onclick="sortTable('events-table', 1)">活動名稱</th>
+                        <th onclick="sortTable('events-table', 2)">活動描述</th>
+                        <th onclick="sortTable('events-table', 3)">開始日期</th>
+                        <th onclick="sortTable('events-table', 4)">結束日期</th>
+                        <th onclick="sortTable('events-table', 5)">任務數量</th>
+                        <th onclick="sortTable('events-table', 6)">最大點數</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if events %}
+                      {% for code, event in events.items() %}
+                      <tr>
+                          <td>
+                            <button onclick="showEventTasks('{{ code }}')">
+                              {{ event.event_code }}
+                            </button>
+                          </td>
+                          <td>{{ event.event_name }}</td>
+                          <td>{{ event.event_description }}</td>
+                          <td>{{ event.event_start_date }}</td>
+                          <td>{{ event.event_end_date }}</td>
+                          <td>{{ event.tasks | length }}</td>
+                          <td>{{ event.max_points }}</td>
+                      </tr>
+                      {% endfor %}
+                    {% else %}
+                      <tr>
+                        <td colspan="7" style="text-align:center;">目前尚無任何活動</td>
+                      </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ===================== 任務列表(切換顯示) ===================== -->
+        <div id="task-list-section" class="hidden">
+          <h2 id="selected-event-code" class="section-title">活動 ?? - 任務列表</h2>
+          <div class="search-bar">
+            <input 
+              type="text" 
+              class="search-input" 
+              id="taskSearchInput" 
+              placeholder="搜尋此活動的任務(名稱、描述...)"
+              onkeyup="searchCurrentTasks()" />
+          </div>
+          <table id="tasks-table">
             <thead>
-                <tr>
-                    <th onclick="sortTable('events-table', 0)">活動編號</th>
-                    <th onclick="sortTable('events-table', 1)">活動名稱</th>
-                    <th onclick="sortTable('events-table', 2)">活動描述</th>
-                    <th onclick="sortTable('events-table', 3)">開始日期</th>
-                    <th onclick="sortTable('events-table', 4)">結束日期</th>
-                    <th onclick="sortTable('events-table', 5)">任務數量</th>
-                    <th onclick="sortTable('events-table', 6)">最大點數</th>
-                </tr>
+              <tr>
+                <th onclick="sortTable('tasks-table', 0)">任務 ID</th>
+                <th onclick="sortTable('tasks-table', 1)">任務名稱</th>
+                <th onclick="sortTable('tasks-table', 2)">任務描述</th>
+                <th onclick="sortTable('tasks-table', 3)">任務點數</th>
+              </tr>
             </thead>
-            <tbody>
-                {% for code, event in events.items() %}
-                <tr>
-                    <!-- 原邏輯：點擊button切換到該活動任務列表 -->
-                    <td>
-                      <button 
-                        style="cursor:pointer;" 
-                        onclick="showEventTasks('{{ code }}')">
-                        {{ event.event_code }}
-                      </button>
-                    </td>
-                    <td>{{ event.event_name }}</td>
-                    <td>{{ event.event_description }}</td>
-                    <td>{{ event.event_start_date }}</td>
-                    <td>{{ event.event_end_date }}</td>
-                    <td>{{ event.tasks | length }}</td>
-                    <td>{{ event.max_points }}</td>
-                </tr>
-                {% endfor %}
+            <tbody id="tasks-table-body">
+              <!-- 由JS動態填入 -->
             </tbody>
-        </table>
-    </div>
+          </table>
+          <button onclick="returnToEventList()">返回活動列表</button>
+        </div>
 
-    <!-- ===================== 任務列表(切換顯示) ===================== -->
-    <div id="task-list-section" class="hidden">
-      <h2 id="selected-event-code">活動 ?? - 任務列表</h2>
-      <!-- 搜尋框(針對單個活動的任務) -->
-      <div class="search-bar">
-        <input 
-          type="text" 
-          class="search-input" 
-          id="taskSearchInput" 
-          placeholder="搜尋此活動的任務 (名稱、描述等...)"
-          onkeyup="searchCurrentTasks()" />
-      </div>
-      <table id="tasks-table">
-        <thead>
-          <tr>
-            <th onclick="sortTable('tasks-table', 0)">任務 ID</th>
-            <th onclick="sortTable('tasks-table', 1)">任務名稱</th>
-            <th onclick="sortTable('tasks-table', 2)">任務描述</th>
-            <th onclick="sortTable('tasks-table', 3)">任務點數</th>
-          </tr>
-        </thead>
-        <tbody id="tasks-table-body">
-          <!-- 由前端JS動態填入 -->
-        </tbody>
-      </table>
-      <!-- 返回按鈕 -->
-      <button onclick="returnToEventList()">返回活動列表</button>
-    </div>
-
-    <!-- ===================== 玩家列表 ===================== -->
-    <h2>玩家列表</h2>
-    <div class="search-bar">
-      <input 
-          type="text" 
-          class="search-input" 
-          id="playerSearchInput" 
-          placeholder="搜尋玩家ID、卡號或活動編號..." 
-          onkeyup="searchPlayers()" />
-    </div>
-    <div id="gamers-container">
-        <table id="gamers-table">
-            <thead>
-                <tr>
-                    <th onclick="sortTable('gamers-table', 0)">玩家 ID</th>
-                    <th onclick="sortTable('gamers-table', 1)">卡號</th>
-                    <th onclick="sortTable('gamers-table', 2)">參加活動</th>
-                    <!-- ★ 新增一欄 「操作」 -->
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for id, gamer in gamers.items() %}
-                <tr>
-                    <td>{{ id }}</td>
-                    <td>{{ gamer.gamer_card_number }}</td>
-                    <td>
-                      {% if gamer.joined_events %}
-                        {% for ev_code in gamer.joined_events %}
-                          <a href="/gamer/{{ id }}/event/{{ ev_code }}">{{ ev_code }}</a>
-                          {% if not loop.last %}, {% endif %}
-                        {% endfor %}
-                      {% else %}
-                        (尚未參加活動)
-                      {% endif %}
-                    </td>
-                    <!-- ★「查詢時間戳記」按鈕/連結 -->
-                    <td>
-                      <a href="/gamer/{{ id }}/timestamps" style="text-decoration:none; color:blue;">
-                        查詢時間戳記
-                      </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <!-- ===================== 玩家列表 ===================== -->
+        <h2 class="section-title">玩家列表</h2>
+        <div class="search-bar">
+          <input 
+              type="text" 
+              class="search-input" 
+              id="playerSearchInput" 
+              placeholder="搜尋玩家ID、卡號或活動編號..." 
+              onkeyup="searchPlayers()" />
+        </div>
+        <div id="gamers-container">
+            <table id="gamers-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('gamers-table', 0)">玩家ID</th>
+                        <th onclick="sortTable('gamers-table', 1)">卡號</th>
+                        <th onclick="sortTable('gamers-table', 2)">參加活動</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if gamers %}
+                      {% for id, gamer in gamers.items() %}
+                      <tr>
+                          <td>{{ id }}</td>
+                          <td>{{ gamer.gamer_card_number }}</td>
+                          <td>
+                            {% if gamer.joined_events %}
+                              {% for ev_code in gamer.joined_events %}
+                                <a href="/gamer/{{ id }}/event/{{ ev_code }}">{{ ev_code }}</a>
+                                {% if not loop.last %}, {% endif %}
+                              {% endfor %}
+                            {% else %}
+                              (尚未參加活動)
+                            {% endif %}
+                          </td>
+                          <td>
+                            <a href="/gamer/{{ id }}/timestamps" style="color: #2196F3;">
+                              查詢時間戳記
+                            </a>
+                          </td>
+                      </tr>
+                      {% endfor %}
+                    {% else %}
+                      <tr>
+                        <td colspan="4" style="text-align:center;">目前尚無玩家資料</td>
+                      </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
-      const eventsData = JSON.parse('{{ events|tojson|safe }}');
+      // 定義 eventsData 變數，並將活動資料傳遞給它
+      const eventsData = {{ events | tojson | safe }};
 
-      /********************************
-       * 1. 通用表格排序函式
-       ********************************/
+      // 切換深色模式
+      function toggleDarkMode() {
+        document.body.classList.toggle("dark-mode");
+      }
+
+      // ------ 排序表格 ------
       function sortTable(tableId, columnIndex) {
         let table = document.getElementById(tableId);
         if (!table) return;
-
         let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
         switching = true;
-        dir = "asc"; 
-
+        dir = "asc";
         while (switching) {
           switching = false;
           rows = table.rows;
           for (i = 1; i < (rows.length - 1); i++) {
             shouldSwitch = false;
             let xVal = rows[i].getElementsByTagName("TD")[columnIndex]?.innerText.toLowerCase() || "";
-            let yVal = rows[i + 1].getElementsByTagName("TD")[columnIndex]?.innerText.toLowerCase() || "";
-
+            let yVal = rows[i+1].getElementsByTagName("TD")[columnIndex]?.innerText.toLowerCase() || "";
             if (dir === "asc") {
               if (xVal > yVal) {
                 shouldSwitch = true;
@@ -181,9 +356,9 @@
             }
           }
           if (shouldSwitch) {
-            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            rows[i].parentNode.insertBefore(rows[i+1], rows[i]);
             switching = true;
-            switchcount++; 
+            switchcount++;
           } else {
             if (switchcount === 0 && dir === "asc") {
               dir = "desc";
@@ -193,114 +368,80 @@
         }
       }
 
-      /********************************
-       * 2. 活動列表搜尋
-       ********************************/
+      // ------ 搜尋活動 ------
       function searchEvents() {
         let input = document.getElementById("eventSearchInput");
         let filter = input.value.toUpperCase();
         let table = document.getElementById("events-table");
         let tr = table.getElementsByTagName("tr");
-
-        for (let i = 1; i < tr.length; i++) {
+        for (let i=1; i<tr.length; i++){
           let tds = tr[i].getElementsByTagName("td");
-          if (tds.length < 7) continue;
-
-          let txtCode = tds[0].innerText.toUpperCase();
-          let txtName = tds[1].innerText.toUpperCase();
-          let txtDesc = tds[2].innerText.toUpperCase();
-          let txtStart = tds[3].innerText.toUpperCase();
-          let txtEnd   = tds[4].innerText.toUpperCase();
-          let txtTaskCount = tds[5].innerText.toUpperCase();
-          let txtMaxPts   = tds[6].innerText.toUpperCase();
-
-          if (
-            txtCode.indexOf(filter) > -1 ||
-            txtName.indexOf(filter) > -1 ||
-            txtDesc.indexOf(filter) > -1 ||
-            txtStart.indexOf(filter) > -1 ||
-            txtEnd.indexOf(filter) > -1 ||
-            txtTaskCount.indexOf(filter) > -1 ||
-            txtMaxPts.indexOf(filter) > -1
-          ) {
-            tr[i].style.display = "";
+          if(tds.length<7) continue;
+          let txts = [];
+          for(let c=0; c<7; c++){
+            txts.push(tds[c].innerText.toUpperCase());
+          }
+          if(txts.some(t=>t.indexOf(filter)>-1)){
+            tr[i].style.display="";
           } else {
-            tr[i].style.display = "none";
+            tr[i].style.display="none";
           }
         }
       }
 
-      /********************************
-       * 3. 玩家列表搜尋
-       ********************************/
+      // ------ 搜尋玩家 ------
       function searchPlayers() {
         let input = document.getElementById("playerSearchInput");
         let filter = input.value.toUpperCase();
         let table = document.getElementById("gamers-table");
         let tr = table.getElementsByTagName("tr");
-
-        for (let i = 1; i < tr.length; i++) {
-          let tds = tr[i].getElementsByTagName("td");
-          if (tds.length < 4) continue; 
-          let txtPID   = tds[0].innerText.toUpperCase();
-          let txtCard  = tds[1].innerText.toUpperCase();
-          let txtEvent = tds[2].innerText.toUpperCase();
-
-          if (
-            txtPID.indexOf(filter) > -1 ||
-            txtCard.indexOf(filter) > -1 ||
-            txtEvent.indexOf(filter) > -1
-          ) {
-            tr[i].style.display = "";
+        for(let i=1; i<tr.length; i++){
+          let tds=tr[i].getElementsByTagName("td");
+          if(tds.length<4) continue;
+          let txtPID=tds[0].innerText.toUpperCase();
+          let txtCard=tds[1].innerText.toUpperCase();
+          let txtEvent=tds[2].innerText.toUpperCase();
+          if(txtPID.indexOf(filter)>-1 || txtCard.indexOf(filter)>-1 || txtEvent.indexOf(filter)>-1) {
+            tr[i].style.display="";
           } else {
-            tr[i].style.display = "none";
+            tr[i].style.display="none";
           }
         }
       }
 
-      /********************************
-       * 4. 顯示特定活動的任務 (前端切換)
-       ********************************/
+      // ------ 任務顯示/返回 ------
       function showEventTasks(eventCode) {
         let eventObj = eventsData[eventCode];
-        if (!eventObj) {
+        if(!eventObj){
           alert("查無此活動: " + eventCode);
           return;
         }
-
-        // 隱藏活動列表
-        document.getElementById('events-container').style.display = "none";
-        document.getElementById('eventSearchInput').style.display = "none";
-
-        // 顯示任務列表
+        document.getElementById('events-container').style.display="none";
+        document.getElementById('eventSearchInput').style.display="none";
         document.getElementById('task-list-section').classList.remove("hidden");
-        document.getElementById('selected-event-code').innerText = `活動 ${eventCode} - 任務列表`;
+        document.getElementById('selected-event-code').innerText=`活動 ${eventCode} - 任務列表`;
 
         let taskBody = document.getElementById('tasks-table-body');
         taskBody.innerHTML = "";
-
-        if (eventObj.tasks && eventObj.tasks.length > 0) {
-          for (let t of eventObj.tasks) {
+        if(eventObj.tasks && eventObj.tasks.length > 0){
+          eventObj.tasks.forEach(t => {
             let row = document.createElement("tr");
-
             let tdID = document.createElement("td");
             tdID.innerText = t.task_id;
-            row.appendChild(tdID);
-
             let tdName = document.createElement("td");
             tdName.innerText = t.task_name;
-            row.appendChild(tdName);
-
             let tdDesc = document.createElement("td");
             tdDesc.innerText = t.task_description;
-            row.appendChild(tdDesc);
-
             let tdPts = document.createElement("td");
             tdPts.innerText = t.task_points;
+
+            row.appendChild(tdID);
+            row.appendChild(tdName);
+            row.appendChild(tdDesc);
             row.appendChild(tdPts);
 
             taskBody.appendChild(row);
-          }
+          });
         } else {
           let row = document.createElement("tr");
           let td = document.createElement("td");
@@ -311,42 +452,36 @@
         }
       }
 
-      /********************************
-       * 5. 返回活動列表
-       ********************************/
       function returnToEventList() {
-        document.getElementById('events-container').style.display = "";
-        document.getElementById('eventSearchInput').style.display = "";
+        document.getElementById('events-container').style.display="";
+        document.getElementById('eventSearchInput').style.display="";
         document.getElementById('task-list-section').classList.add("hidden");
       }
 
-      /********************************
-       * 6. 搜尋目前顯示的任務
-       ********************************/
+      // ------ 搜尋當前顯示的任務 ------
       function searchCurrentTasks() {
         let input = document.getElementById("taskSearchInput");
         let filter = input.value.toUpperCase();
         let table = document.getElementById("tasks-table");
         let tr = table.getElementsByTagName("tr");
-
-        for (let i = 1; i < tr.length; i++) {
+        for(let i=1; i<tr.length; i++){
           let tds = tr[i].getElementsByTagName("td");
-          if (!tds || tds.length < 4) continue;
+          if(!tds || tds.length<4) continue;
 
           let txtID   = tds[0].innerText.toUpperCase();
           let txtName = tds[1].innerText.toUpperCase();
           let txtDesc = tds[2].innerText.toUpperCase();
           let txtPts  = tds[3].innerText.toUpperCase();
 
-          if (
-            txtID.indexOf(filter) > -1 ||
-            txtName.indexOf(filter) > -1 ||
-            txtDesc.indexOf(filter) > -1 ||
-            txtPts.indexOf(filter) > -1
-          ) {
-            tr[i].style.display = "";
+          if(
+            txtID.indexOf(filter)>-1 ||
+            txtName.indexOf(filter)>-1 ||
+            txtDesc.indexOf(filter)>-1 ||
+            txtPts.indexOf(filter)>-1
+          ){
+            tr[i].style.display="";
           } else {
-            tr[i].style.display = "none";
+            tr[i].style.display="none";
           }
         }
       }

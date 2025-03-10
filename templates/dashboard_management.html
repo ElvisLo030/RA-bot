@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>活動管理 - RA DCBot</title>
+  <style>
+    /* =====================
+       全域基礎樣式與過渡
+       ===================== */
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      margin: 20px;
+      color: #333;
+      background-color: #f9f9f9;
+      transition: background-color 0.3s, color 0.3s;
+      position: relative; /* 用於頂端右上角按鈕定位 */
+    }
+    h1, h2, h3 {
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    a {
+      color: #2196F3;
+      text-decoration: none;
+    }
+    a:hover {
+      color: #0b7dda;
+      text-decoration: underline;
+    }
+
+    /* =====================
+       深色模式 (dark-mode)
+       ===================== */
+    body.dark-mode {
+      background-color: #222;
+      color: #eee;
+    }
+    body.dark-mode table {
+      background-color: #2a2a2a;
+    }
+    body.dark-mode input[type="text"],
+    body.dark-mode input[type="number"],
+    body.dark-mode input[type="date"] {
+      background-color: #444;
+      color: #fff;
+      border: 1px solid #555;
+    }
+    body.dark-mode .form-section {
+      background-color: #333;
+      border: 1px solid #666;
+    }
+    body.dark-mode button {
+      background-color: #333;
+      color: #fff;
+      border: 1px solid #555;
+    }
+    body.dark-mode button:hover {
+      background-color: #555;
+    }
+
+    /* =====================
+       右上角按鈕容器
+       ===================== */
+    .top-right-actions {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+    }
+    .top-right-actions button {
+      margin-left: 8px;
+      padding: 6px 10px;
+      background-color: #666;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .top-right-actions button:hover {
+      background-color: #444;
+    }
+
+    /* =====================
+       區塊樣式
+       ===================== */
+    .section-title {
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 4px;
+      font-size: 1.2rem;
+    }
+    .form-section {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+      background-color: #fff;
+    }
+    label {
+      display: inline-block;
+      width: 130px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="number"], input[type="date"] {
+      padding: 6px;
+      width: 250px;
+      margin-bottom: 8px;
+    }
+    button {
+      padding: 8px 12px;
+      margin-top: 6px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #2196F3;
+      color: #fff;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #1976D2;
+    }
+    .cancel-btn {
+      background-color: #aaa;
+      margin-left: 8px;
+    }
+    .cancel-btn:hover {
+      background-color: #888;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .result-message {
+      margin-top: 10px;
+      color: green;
+    }
+    .error-message {
+      color: red;
+      margin-top: 10px;
+    }
+
+    /* =====================
+       活動列表
+       ===================== */
+    #eventListTable {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    #eventListTable th, #eventListTable td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    #eventListTable th {
+      background-color: #eee;
+      text-transform: uppercase;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* =====================
+       隱藏/顯示 區域
+       ===================== */
+    .hidden {
+      display: none;
+    }
+
+    /* 嵌套清單/按鈕等微調 */
+    ul {
+      list-style-type: disc;
+      margin-left: 20px;
+    }
+    .inline-button {
+      margin-left: 8px;
+      font-size: 12px;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .inline-button:hover {
+      background-color: #1976D2;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>活動管理</h1>
+
+  <!-- 
+    1) 將「新增活動」+「返回主頁」按鈕 放置右上角
+  -->
+  <div class="top-right-actions">
+    <button onclick="location.href='/dashboard'">返回主頁</button>
+    <button onclick="toggleCreateEventPanel()" id="btnToggleEventForm">新增活動</button>
+  </div>
+
+  <!-- === 新增活動表單 (預設隱藏) === -->
+  <div id="createEventPanel" class="form-section hidden">
+    <h2 class="section-title">新增活動</h2>
+    <form id="createEventForm" onsubmit="return createEventSubmit(event)">
+      <div class="form-group">
+        <label>活動編號(RAEXXX)</label>
+        <input type="text" name="event_code" required />
+      </div>
+      <div class="form-group">
+        <label>活動名稱</label>
+        <input type="text" name="event_name" required />
+      </div>
+      <div class="form-group">
+        <label>活動描述</label>
+        <input type="text" name="event_desc" />
+      </div>
+      <div class="form-group">
+        <label>開始日期</label>
+        <input type="text" name="start_date" placeholder="YYYY-MM-DD" required />
+      </div>
+      <div class="form-group">
+        <label>結束日期</label>
+        <input type="text" name="end_date" placeholder="YYYY-MM-DD" required />
+      </div>
+      <button type="submit">確認新增</button>
+      <!-- 4) 新增 取消 按鈕 -->
+      <button type="button" class="cancel-btn" onclick="toggleCreateEventPanel()">取消</button>
+
+      <div class="result-message" id="eventMsg"></div>
+    </form>
+  </div>
+
+  <!-- ======== 活動列表 ======== -->
+  <h2 class="section-title">活動列表</h2>
+  <table id="eventListTable">
+    <thead>
+      <tr>
+        <th onclick="sortTable('eventListTable', 0)">活動編號</th>
+        <th onclick="sortTable('eventListTable', 1)">活動名稱</th>
+        <th onclick="sortTable('eventListTable', 2)">任務數量</th>
+        <th onclick="sortTable('eventListTable', 3)">獎品數量</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="eventListTbody">
+      <!-- 由JS動態生成 -->
+    </tbody>
+  </table>
+
+  <!-- ======== 詳細活動 (含編輯、任務、獎勵) 的管理介面 (預設隱藏) ======== -->
+  <div id="detailPanel" class="hidden">
+    <h3>活動詳細 - <span id="detailEventCode"></span></h3>
+    <p><strong>描述：</strong><span id="detailEventDesc"></span></p>
+
+    <!-- ==== 編輯活動 ==== -->
+    <button onclick="toggleEditEventForm()" class="inline-button">編輯活動</button>
+    <button onclick="deleteEvent()" class="inline-button" style="background-color: #f44336;">刪除活動</button>
+
+    <div id="editEventPanel" class="form-section hidden">
+      <h4>編輯活動</h4>
+      <form id="editEventForm" onsubmit="return editEventSubmit(event)">
+        <div class="form-group">
+          <label>活動名稱</label>
+          <input type="text" name="event_name" required />
+        </div>
+        <div class="form-group">
+          <label>活動描述</label>
+          <input type="text" name="event_desc" />
+        </div>
+        <div class="form-group">
+          <label>開始日期</label>
+          <input type="text" name="start_date" placeholder="YYYY-MM-DD" required />
+        </div>
+        <div class="form-group">
+          <label>結束日期</label>
+          <input type="text" name="end_date" placeholder="YYYY-MM-DD" required />
+        </div>
+        <button type="submit">儲存變更</button>
+        <!-- 4) 新增 取消 按鈕 -->
+        <button type="button" class="cancel-btn" onclick="toggleEditEventForm()">取消</button>
+
+        <div class="result-message" id="editEventMsg"></div>
+      </form>
+    </div>
+
+    <hr />
+
+    <!-- ==== 任務管理 ==== -->
+    <div id="tasksPanel" class="form-section">
+      <h4>任務列表</h4>
+      <ul id="taskList"></ul>
+
+      <!-- 新增任務 -->
+      <button onclick="toggleAddTaskForm()" class="inline-button">新增任務</button>
+      <div id="addTaskPanel" class="form-section hidden">
+        <form id="addTaskForm" onsubmit="return createTaskSubmit(event)">
+          <div class="form-group">
+            <label>任務名稱</label>
+            <input type="text" name="task_name" required />
+          </div>
+          <div class="form-group">
+            <label>任務描述</label>
+            <input type="text" name="task_description" />
+          </div>
+          <div class="form-group">
+            <label>任務點數</label>
+            <input type="number" name="task_points" required />
+          </div>
+          <button type="submit">新增任務</button>
+          <!-- 4) 新增 取消 按鈕 -->
+          <button type="button" class="cancel-btn" onclick="toggleAddTaskForm()">取消</button>
+
+          <div class="result-message" id="taskMsg"></div>
+        </form>
+      </div>
+
+      <!-- 3) 任務「編輯表單」(取代 prompt) -->
+      <div id="editTaskPanel" class="form-section hidden">
+        <h4>編輯任務</h4>
+        <form id="editTaskForm" onsubmit="return editTaskSubmit(event)">
+          <input type="hidden" name="task_id" />
+          <div class="form-group">
+            <label>任務名稱</label>
+            <input type="text" name="task_name" required />
+          </div>
+          <div class="form-group">
+            <label>任務描述</label>
+            <input type="text" name="task_description" />
+          </div>
+          <div class="form-group">
+            <label>任務點數</label>
+            <input type="number" name="task_points" required />
+          </div>
+          <button type="submit">儲存</button>
+          <!-- 4) 取消按鈕 -->
+          <button type="button" class="cancel-btn" onclick="toggleEditTaskForm(false)">取消</button>
+          
+          <div class="result-message" id="editTaskMsg"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ==== 獎勵管理 ==== -->
+    <div id="prizesPanel" class="form-section">
+      <h4>獎勵列表</h4>
+      <ul id="prizeList"></ul>
+
+      <!-- 新增獎勵 -->
+      <button onclick="toggleAddPrizeForm()" class="inline-button">新增獎勵</button>
+      <div id="addPrizePanel" class="form-section hidden">
+        <form id="addPrizeForm" onsubmit="return createPrizeSubmit(event)">
+          <div class="form-group">
+            <label>獎勵名稱</label>
+            <input type="text" name="prize_name" required />
+          </div>
+          <div class="form-group">
+            <label>所需點數</label>
+            <input type="number" name="points_required" required />
+          </div>
+          <button type="submit">新增獎勵</button>
+          <!-- 4) 新增 取消 按鈕 -->
+          <button type="button" class="cancel-btn" onclick="toggleAddPrizeForm()">取消</button>
+
+          <div class="result-message" id="prizeMsg"></div>
+        </form>
+      </div>
+
+      <!-- 3) 獎勵「編輯表單」(取代 prompt) -->
+      <div id="editPrizePanel" class="form-section hidden">
+        <h4>編輯獎勵</h4>
+        <form id="editPrizeForm" onsubmit="return editPrizeSubmit(event)">
+          <input type="hidden" name="prize_id" />
+          <div class="form-group">
+            <label>獎勵名稱</label>
+            <input type="text" name="prize_name" required />
+          </div>
+          <div class="form-group">
+            <label>所需點數</label>
+            <input type="number" name="points_required" required />
+          </div>
+          <button type="submit">儲存</button>
+          <!-- 4) 取消按鈕 -->
+          <button type="button" class="cancel-btn" onclick="toggleEditPrizeForm(false)">取消</button>
+
+          <div class="result-message" id="editPrizeMsg"></div>
+        </form>
+      </div>
+    </div>
+
+    <button onclick="hideDetailPanel()" style="margin-top:10px;">關閉</button>
+  </div>
+
+  <script>
+    /* ===============================
+       深色模式同步
+       =============================== */
+    function applyDarkModeFromLocalStorage(){
+      const isDark = localStorage.getItem("darkMode") === "true";
+      if(isDark){
+        document.body.classList.add("dark-mode");
+      } else {
+        document.body.classList.remove("dark-mode");
+      }
+    }
+    document.addEventListener("DOMContentLoaded", ()=>{
+      applyDarkModeFromLocalStorage();
+      loadAllEvents();
+    });
+
+    /* ===============================
+       後端 API 位址
+       =============================== */
+    const API_BASE = "/api";
+
+    /* ===============================
+       切換「新增活動」表單 (顯示/隱藏)
+       =============================== */
+    function toggleCreateEventPanel(){
+      const panel = document.getElementById("createEventPanel");
+      panel.classList.toggle("hidden");
+    }
+
+    /* ===============================
+       排序表格 (保持原本邏輯)
+       =============================== */
+    function sortTable(tableId, columnIndex){
+      let table = document.getElementById(tableId);
+      if (!table) return;
+      let rows, switching, i, x, y, shouldSwitch, dir, switchcount=0;
+      switching=true;
+      dir="asc";
+      while(switching){
+        switching=false;
+        rows=table.rows;
+        for(i=1; i<(rows.length-1); i++){
+          shouldSwitch=false;
+          let xVal=rows[i].getElementsByTagName("TD")[columnIndex]?.innerText.toLowerCase()||"";
+          let yVal=rows[i+1].getElementsByTagName("TD")[columnIndex]?.innerText.toLowerCase()||"";
+          if(dir==="asc"){
+            if(xVal>yVal){shouldSwitch=true;break;}
+          } else if(dir==="desc"){
+            if(xVal<yVal){shouldSwitch=true;break;}
+          }
+        }
+        if(shouldSwitch){
+          rows[i].parentNode.insertBefore(rows[i+1], rows[i]);
+          switching=true;
+          switchcount++;
+        } else {
+          if(switchcount===0 && dir==="asc"){
+            dir="desc";
+            switching=true;
+          }
+        }
+      }
+    }
+
+    /* ===============================
+       載入所有活動 (保持原本邏輯)
+       =============================== */
+    async function loadAllEvents(){
+      try {
+        let resp = await fetch(API_BASE + "/event");
+        if(!resp.ok){
+          console.log("Load event list fail:", resp.statusText);
+          return;
+        }
+        let events = await resp.json();
+        renderEventTable(events);
+      } catch(e){
+        console.log("loadAllEvents error:", e);
+      }
+    }
+
+    function renderEventTable(events){
+      const tbody = document.getElementById("eventListTbody");
+      tbody.innerHTML="";
+      if(!Array.isArray(events)||events.length===0){
+        let row=document.createElement("tr");
+        let td=document.createElement("td");
+        td.colSpan=5;
+        td.style.textAlign="center";
+        td.innerText="目前尚無活動資料";
+        row.appendChild(td);
+        tbody.appendChild(row);
+        return;
+      }
+      events.forEach(ev=>{
+        const code=ev.event_code;
+        const name=ev.event_name;
+        const taskCount = ev.tasks?.length || 0;
+        const prizeCount = ev.prizes?.length || 0;
+
+        let tr = document.createElement("tr");
+
+        let tdCode = document.createElement("td");
+        tdCode.innerText = code;
+
+        let tdName = document.createElement("td");
+        tdName.innerText = name;
+
+        let tdTaskCount = document.createElement("td");
+        tdTaskCount.innerText = taskCount;
+
+        let tdPrizeCount = document.createElement("td");
+        tdPrizeCount.innerText = prizeCount;
+
+        let tdAction = document.createElement("td");
+        let btnView = document.createElement("button");
+        btnView.textContent="查看";
+        btnView.className="inline-button";
+
+        /*
+          2) 改成「同一按鈕二次點擊收回詳細」:
+             - 若 detailPanel 已經顯示該活動，就收起
+             - 否則顯示
+        */
+        btnView.onclick=()=>{
+          if(!document.getElementById('detailPanel').classList.contains('hidden')
+             && currentEventCode===ev.event_code){
+            // 已顯示，且是同一個活動 => 收回
+            hideDetailPanel();
+          } else {
+            // 顯示/更新
+            viewEventDetail(ev);
+          }
+        };
+
+        tdAction.appendChild(btnView);
+
+        tr.appendChild(tdCode);
+        tr.appendChild(tdName);
+        tr.appendChild(tdTaskCount);
+        tr.appendChild(tdPrizeCount);
+        tr.appendChild(tdAction);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* ===============================
+       全域狀態: currentEventCode, currentEventObj
+       =============================== */
+    let currentEventCode=null;
+    let currentEventObj=null;
+
+    /*
+      2) viewEventDetail() 改為只做「顯示/更新細節」
+         收起動作放在btnView.onclick裏判斷
+    */
+    function viewEventDetail(eventObj){
+      currentEventObj = eventObj;
+      currentEventCode = eventObj.event_code;
+      const desc = eventObj.event_description || "無描述";
+
+      document.getElementById("detailEventCode").textContent = currentEventCode;
+      document.getElementById("detailEventDesc").textContent = desc;
+
+      // 填入「編輯活動」表單
+      const form = document.getElementById("editEventForm");
+      form.event_name.value = eventObj.event_name;
+      form.event_desc.value = eventObj.event_description;
+      form.start_date.value = eventObj.event_start_date;
+      form.end_date.value = eventObj.event_end_date;
+
+      // 渲染任務
+      renderTasks(eventObj.tasks || []);
+      // 渲染獎勵
+      renderPrizes(eventObj.prizes || []);
+
+      document.getElementById("detailPanel").classList.remove("hidden");
+    }
+
+    function hideDetailPanel(){
+      document.getElementById("detailPanel").classList.add("hidden");
+      currentEventCode=null;
+      currentEventObj=null;
+    }
+
+    /* ===============================
+       編輯活動
+       =============================== */
+    function toggleEditEventForm(){
+      const panel=document.getElementById("editEventPanel");
+      panel.classList.toggle("hidden");
+    }
+    async function editEventSubmit(e){
+      e.preventDefault();
+      if(!currentEventCode){
+        alert("無法編輯: 未選活動");
+        return false;
+      }
+      const form=e.target;
+      const data={
+        event_name: form.event_name.value.trim(),
+        event_description: form.event_desc.value.trim(),
+        event_start_date: form.start_date.value.trim(),
+        event_end_date: form.end_date.value.trim()
+      };
+      const msgBox=document.getElementById("editEventMsg");
+      msgBox.textContent="";
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}`;
+        let resp=await fetch(url,{
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(data)
+        });
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="編輯活動失敗: "+ err.detail;
+          return false;
+        }
+        let result=await resp.json();
+        msgBox.style.color="green";
+        msgBox.textContent="成功: "+ result.message;
+        loadAllEvents();
+      }catch(e){
+        msgBox.style.color="red";
+        msgBox.textContent="呼叫API失敗: "+ e;
+      }
+      return false;
+    }
+
+    async function deleteEvent(){
+      if(!currentEventCode){
+        alert("無法刪除: 未選活動");
+        return;
+      }
+      if(!confirm("確定要刪除此活動？此動作無法恢復。")) return;
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}`;
+        let resp=await fetch(url,{method:"DELETE"});
+        if(!resp.ok){
+          let err=await resp.json();
+          alert("刪除失敗: "+ err.detail);
+          return;
+        }
+        let data=await resp.json();
+        alert("刪除成功: "+ data.message);
+        hideDetailPanel();
+        loadAllEvents();
+      }catch(e){
+        alert("呼叫API失敗: "+ e);
+      }
+    }
+
+    /* ===============================
+       新增活動
+       =============================== */
+    async function createEventSubmit(e){
+      e.preventDefault();
+      const form=e.target;
+      let data={
+        event_code: form.event_code.value.trim(),
+        event_name: form.event_name.value.trim(),
+        event_description: form.event_desc.value.trim(),
+        event_start_date: form.start_date.value.trim(),
+        event_end_date: form.end_date.value.trim()
+      };
+      const msgBox=document.getElementById("eventMsg");
+      msgBox.textContent="";
+      try{
+        let resp=await fetch(API_BASE+"/event",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(data)
+        });
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="新增活動失敗: "+ err.detail;
+          return false;
+        }
+        let result=await resp.json();
+        msgBox.style.color="green";
+        msgBox.textContent="成功: "+ result.message;
+        // 新增成功後，可再收回表單
+        toggleCreateEventPanel();
+        loadAllEvents();
+      }catch(e){
+        msgBox.style.color="red";
+        msgBox.textContent="呼叫API失敗: "+ e;
+      }
+      return false;
+    }
+
+    /* ===============================
+       任務管理
+       =============================== */
+    function renderTasks(tasks){
+      const ulTask=document.getElementById("taskList");
+      ulTask.innerHTML="";
+      if(!tasks.length){
+        let li=document.createElement("li");
+        li.innerText="(尚未有任務)";
+        ulTask.appendChild(li);
+        return;
+      }
+      tasks.forEach(t=>{
+        let li=document.createElement("li");
+        li.textContent=`[${t.task_id}] ${t.task_name} (點數:${t.task_points})`;
+
+        // 編輯 => 不再使用 prompt
+        let btnEdit=document.createElement("button");
+        btnEdit.textContent="編輯";
+        btnEdit.className="inline-button";
+        btnEdit.onclick=()=>showEditTaskForm(t);
+        li.appendChild(btnEdit);
+
+        // 刪除 => 舊邏輯維持
+        let btnDel=document.createElement("button");
+        btnDel.textContent="刪除";
+        btnDel.className="inline-button";
+        btnDel.style.backgroundColor="#f44336";
+        btnDel.onclick=()=>deleteTask(t.task_id);
+        li.appendChild(btnDel);
+
+        ulTask.appendChild(li);
+      });
+    }
+    function toggleAddTaskForm(){
+      const panel=document.getElementById("addTaskPanel");
+      panel.classList.toggle("hidden");
+      // 重置表單
+      const form=document.getElementById("addTaskForm");
+      form.reset();
+    }
+    async function createTaskSubmit(e){
+      e.preventDefault();
+      if(!currentEventCode){
+        alert("未選擇活動，無法新增任務");
+        return false;
+      }
+      let form=e.target;
+      let task_name=form.task_name.value.trim();
+      let task_description=form.task_description.value.trim();
+      let task_points=form.task_points.value.trim();
+
+      const msgBox=document.getElementById("taskMsg");
+      msgBox.textContent="";
+      try{
+        let url=API_BASE+`/event/${encodeURIComponent(currentEventCode)}/task?`+
+          `task_name=${encodeURIComponent(task_name)}`+
+          `&task_description=${encodeURIComponent(task_description)}`+
+          `&task_points=${encodeURIComponent(task_points)}`;
+        let resp=await fetch(url,{method:"POST"});
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="新增任務失敗: "+ err.detail;
+          return false;
+        }
+        let result=await resp.json();
+        msgBox.style.color="green";
+        msgBox.textContent="成功: "+ result.message;
+        // 收回表單
+        toggleAddTaskForm();
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        msgBox.style.color="red";
+        msgBox.textContent="呼叫API失敗: "+ e;
+      }
+      return false;
+    }
+
+    /*
+      3) 新增: showEditTaskForm(t)
+         顯示任務編輯表單, 填入 t
+    */
+    function showEditTaskForm(taskObj){
+      const panel=document.getElementById("editTaskPanel");
+      panel.classList.remove("hidden");
+
+      const form=document.getElementById("editTaskForm");
+      form.task_id.value=taskObj.task_id; // hidden
+      form.task_name.value=taskObj.task_name;
+      form.task_description.value=taskObj.task_description||"";
+      form.task_points.value=taskObj.task_points||0;
+    }
+    function toggleEditTaskForm(show){
+      const panel=document.getElementById("editTaskPanel");
+      if(show){
+        panel.classList.remove("hidden");
+      } else {
+        panel.classList.add("hidden");
+      }
+    }
+
+    async function editTaskSubmit(e){
+      e.preventDefault();
+      if(!currentEventCode){
+        alert("無法編輯任務, 未選活動");
+        return false;
+      }
+      const form=e.target;
+      let task_id=form.task_id.value;
+      let data={
+        task_name: form.task_name.value.trim(),
+        task_description: form.task_description.value.trim(),
+        task_points: parseInt(form.task_points.value.trim(), 10)
+      };
+      const msgBox=document.getElementById("editTaskMsg");
+      msgBox.textContent="";
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}/task/${task_id}`;
+        let resp=await fetch(url,{
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(data)
+        });
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="編輯任務失敗: "+ err.detail;
+          return false;
+        }
+        alert("編輯任務成功");
+        // 收回表單
+        toggleEditTaskForm(false);
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        alert("呼叫API失敗: "+ e);
+      }
+      return false;
+    }
+
+    async function deleteTask(task_id){
+      if(!confirm("確定要刪除此任務？"))return;
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}/task/${task_id}`;
+        let resp=await fetch(url,{method:"DELETE"});
+        if(!resp.ok){
+          let err=await resp.json();
+          alert("刪除任務失敗: "+ err.detail);
+          return;
+        }
+        alert("刪除任務成功");
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        alert("呼叫API失敗: "+ e);
+      }
+    }
+
+    /* ===============================
+       獎勵管理
+       =============================== */
+    function renderPrizes(prizes){
+      const ulPrize=document.getElementById("prizeList");
+      ulPrize.innerHTML="";
+      if(!prizes.length){
+        let li=document.createElement("li");
+        li.innerText="(尚未有獎勵)";
+        ulPrize.appendChild(li);
+        return;
+      }
+      prizes.forEach(p=>{
+        let li=document.createElement("li");
+        li.textContent=`ID=${p.prize_id}: ${p.prize_name} (需:${p.points_required}點)`;
+
+        let btnEdit=document.createElement("button");
+        btnEdit.textContent="編輯";
+        btnEdit.className="inline-button";
+        btnEdit.onclick=()=>showEditPrizeForm(p);
+        li.appendChild(btnEdit);
+
+        let btnDel=document.createElement("button");
+        btnDel.textContent="刪除";
+        btnDel.className="inline-button";
+        btnDel.style.backgroundColor="#f44336";
+        btnDel.onclick=()=>deletePrize(p.prize_id);
+        li.appendChild(li.lastChild);
+
+        li.appendChild(btnDel);
+        ulPrize.appendChild(li);
+      });
+    }
+    function toggleAddPrizeForm(){
+      const panel=document.getElementById("addPrizePanel");
+      panel.classList.toggle("hidden");
+      const form=document.getElementById("addPrizeForm");
+      form.reset();
+    }
+    async function createPrizeSubmit(e){
+      e.preventDefault();
+      if(!currentEventCode){
+        alert("無法新增獎勵: 未選活動");
+        return false;
+      }
+      const form=e.target;
+      let data={
+        prize_name: form.prize_name.value.trim(),
+        points_required: parseInt(form.points_required.value.trim(),10)
+      };
+      const msgBox=document.getElementById("prizeMsg");
+      msgBox.textContent="";
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}/prize`;
+        let resp=await fetch(url,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(data)
+        });
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="新增獎勵失敗: "+ err.detail;
+          return false;
+        }
+        let result=await resp.json();
+        msgBox.style.color="green";
+        msgBox.textContent="成功: "+ result.message;
+        toggleAddPrizeForm();
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        msgBox.style.color="red";
+        msgBox.textContent="呼叫API失敗: "+ e;
+      }
+      return false;
+    }
+
+    /*
+      3) showEditPrizeForm(pObj)
+         顯示獎勵編輯表單, 填入 pObj
+    */
+    function showEditPrizeForm(pObj){
+      const panel=document.getElementById("editPrizePanel");
+      panel.classList.remove("hidden");
+      const form=document.getElementById("editPrizeForm");
+      form.prize_id.value=pObj.prize_id;
+      form.prize_name.value=pObj.prize_name;
+      form.points_required.value=pObj.points_required;
+    }
+    function toggleEditPrizeForm(show){
+      const panel=document.getElementById("editPrizePanel");
+      if(show){
+        panel.classList.remove("hidden");
+      } else {
+        panel.classList.add("hidden");
+      }
+    }
+
+    async function editPrizeSubmit(e){
+      e.preventDefault();
+      if(!currentEventCode){
+        alert("無法編輯獎勵: 未選活動");
+        return false;
+      }
+      const form=e.target;
+      let prize_id=form.prize_id.value;
+      let data={
+        prize_name: form.prize_name.value.trim(),
+        points_required: parseInt(form.points_required.value.trim(),10)
+      };
+      const msgBox=document.getElementById("editPrizeMsg");
+      msgBox.textContent="";
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}/prize/${prize_id}`;
+        let resp=await fetch(url,{
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(data)
+        });
+        if(!resp.ok){
+          let err=await resp.json();
+          msgBox.style.color="red";
+          msgBox.textContent="編輯獎勵失敗: "+ err.detail;
+          return false;
+        }
+        alert("編輯獎勵成功");
+        toggleEditPrizeForm(false);
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        alert("呼叫API失敗: "+ e);
+      }
+      return false;
+    }
+
+    async function deletePrize(prize_id){
+      if(!confirm("確定要刪除此獎勵？"))return;
+      try{
+        let url=`${API_BASE}/event/${encodeURIComponent(currentEventCode)}/prize/${prize_id}`;
+        let resp=await fetch(url,{method:"DELETE"});
+        if(!resp.ok){
+          let err=await resp.json();
+          alert("刪除獎勵失敗: "+ err.detail);
+          return;
+        }
+        alert("刪除獎勵成功");
+        await fetchEventDetailAndRender(currentEventCode);
+      }catch(e){
+        alert("呼叫API失敗: "+ e);
+      }
+    }
+
+    /* ===============================
+       幫助函式: 重新抓取單一活動並 render
+       =============================== */
+    async function fetchEventDetailAndRender(code){
+      try{
+        let resp=await fetch(`${API_BASE}/event/${encodeURIComponent(code)}`);
+        if(!resp.ok) return;
+        let ev=await resp.json();
+        viewEventDetail(ev);
+      }catch(e){
+        console.log("fetchEventDetailAndRender error:", e);
+      }
+    }
+  </script>
+</body>
+</html>

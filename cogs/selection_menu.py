@@ -2,9 +2,8 @@ import discord
 from discord.ext import commands
 from discord.ui import Select, View, Modal, TextInput
 from cogs.card_binding import CardBindingCog
-from main import not_blocked
-from main import save_data
-from datetime import datetime
+from main import not_blocked, save_data, record_api
+from datetime import datetime, timedelta
 
 class CardBindModal(Modal):
     def __init__(self, cog: CardBindingCog):
@@ -16,7 +15,6 @@ class CardBindModal(Modal):
             max_length=8
         )
         self.add_item(self.card_number)
-        save_data()
 
     async def on_submit(self, interaction: discord.Interaction):
         success, msg = await self.cog.bind_card(interaction.user, self.card_number.value)
@@ -101,6 +99,73 @@ class JoinedEventsView(View):
         super().__init__(timeout=None)
         self.add_item(JoinedEventsSelect(bot, joined_events, user_id))
 
+class ViewPrizeEventSelect(discord.ui.Select):
+    """
+    第一步：使用者從已參加的活動中選一個活動，查看有哪些獎品 + 是否已兌換。
+    """
+    def __init__(self, bot: commands.Bot, user: discord.User):
+        self.bot = bot
+        self.user = user
+
+        user_data = bot.gamers.get(user.id, {})
+        joined_events = user_data.get("joined_events", [])
+        options = []
+        for ev_code in joined_events:
+            event_obj = bot.events.get(ev_code, {})
+            # 僅顯示有prizes的活動 (如果沒有prizes就不列出)
+            if "prizes" in event_obj and event_obj["prizes"]:
+                event_name = event_obj.get("event_name", "未命名活動")
+                options.append(discord.SelectOption(label=f"{event_name} ({ev_code})", value=ev_code))
+
+        if not options:
+            # 若沒有任何可兌換獎品的活動，就顯示一個 disabled
+            options = [discord.SelectOption(label="沒有可兌換獎品的活動", value="none", default=True, disabled=True)]
+
+        super().__init__(
+            placeholder="選擇活動，查看可兌換獎品",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            await interaction.response.send_message("目前沒有可兌換獎品的活動。", ephemeral=True)
+            return
+
+        event_code = self.values[0]
+        user_data = self.bot.gamers.get(self.user.id, {})
+        event_obj = self.bot.events.get(event_code, {})
+        prizes = event_obj.get("prizes", [])
+
+        # 準備一個「已兌換清單」(若尚未有redeemed_prizes，就初始化)
+        redeemed_map = user_data.setdefault("redeemed_prizes", {})
+        user_redeemed_list = redeemed_map.setdefault(event_code, [])
+
+        # 生成可視化訊息
+        lines = []
+        lines.append(f"**活動 {event_code}** 可兌換獎品：")
+        if not prizes:
+            lines.append("此活動尚未配置任何獎品。")
+        else:
+            for p in prizes:
+                p_id = p["prize_id"]
+                p_name = p["prize_name"]
+                p_cost = p["points_required"]
+                # 判斷使用者是否已兌換
+                if p_id in user_redeemed_list:
+                    lines.append(f"- [已兌換] {p_name} ( 所需 {p_cost} 點)")
+                else:
+                    lines.append(f"- [未兌換] {p_name} ( 所需 {p_cost} 點)")
+
+        msg = "\n".join(lines)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+class ViewPrizeEventView(View):
+    def __init__(self, bot: commands.Bot, user: discord.User):
+        super().__init__(timeout=None)
+        self.add_item(ViewPrizeEventSelect(bot, user))
+
 class SelectionMenuSelect(discord.ui.Select):
     def __init__(self, cog: CardBindingCog, user: discord.User):
         self.cog = cog
@@ -125,8 +190,10 @@ class SelectionMenuSelect(discord.ui.Select):
                 
                 joined = user_data.get("joined_events", [])
                 if joined:
-                    options.append(discord.SelectOption(label="查詢已參加的活動", value="check_joined_events"))
+                    options.append(discord.SelectOption(label="已參加的活動", description="可查詢已參加的活動", value="check_joined_events"))
                     options.append(discord.SelectOption(label="上傳圖片", description="請點選查詢指令", value="upload_pic"))
+                    if self.has_redeemable_event(joined):
+                        options.append(discord.SelectOption(label="查看獎品", value="view_prize_list"))
 
                 if self.has_any_timestamp(user.id):
                     options.append(discord.SelectOption(label="查詢歷史紀錄", description="最多可以查詢最後10筆資料", value="query_timestamps"))
@@ -136,8 +203,10 @@ class SelectionMenuSelect(discord.ui.Select):
 
                 joined = user_data.get("joined_events", [])
                 if joined:
-                    options.append(discord.SelectOption(label="查詢已參加的活動", value="check_joined_events"))
+                    options.append(discord.SelectOption(label="已參加的活動", description="可查詢已參加的活動", value="check_joined_events"))
                     options.append(discord.SelectOption(label="上傳圖片", description="請點選查詢指令", value="upload_pic"))
+                    if self.has_redeemable_event(joined):
+                        options.append(discord.SelectOption(label="查看獎品", value="view_prize_list"))
 
                 if self.has_any_timestamp(user.id):
                     options.append(discord.SelectOption(label="查詢歷史紀錄", description="最多可以查詢最後10筆資料", value="query_timestamps"))
@@ -161,6 +230,13 @@ class SelectionMenuSelect(discord.ui.Select):
             
         return False
 
+    def has_redeemable_event(self, joined_events: list) -> bool:
+        for ev_code in joined_events:
+            event_obj = self.bot.events.get(ev_code, {})
+            if "prizes" in event_obj and event_obj["prizes"]:
+                return True
+        return False
+
     async def callback(self, interaction: discord.Interaction):
         choice = self.values[0]
         if choice == "bind_card":
@@ -177,7 +253,8 @@ class SelectionMenuSelect(discord.ui.Select):
                     "history_event_list": [],
                     "history_event_pts_list": [],
                     "events_points": {},
-                    "joined_event_timestamps": {}
+                    "joined_event_timestamps": {},
+                    "redeemed_prizes": {}  
                 }
                 save_data()
             await interaction.response.send_message("已略過綁卡，你可以隨時使用「綁定卡號」功能綁定。", ephemeral=True)
@@ -215,14 +292,31 @@ class SelectionMenuSelect(discord.ui.Select):
                 record_type = item.get("type","?")
                 pts = item.get("points",0)
                 ev_code = item.get("event_code","")
-                if record_type == "global":
+
+                # --- 新增 admin_redeem 顯示 ---
+                if record_type == "admin_redeem":
+                    # 後台兌換 => 撈出 prize_name
+                    event_obj = self.bot.events.get(ev_code, {})
+                    prize_name = "?"
+                    prize_id = item.get("prize_id")
+                    for p in event_obj.get("prizes", []):
+                        if p["prize_id"] == prize_id:
+                            prize_name = p["prize_name"]
+                            break
+                    detail = f"獎品兌換 (活動：{ev_code}, 獎品={prize_name})"
+
+                elif record_type == "global":
                     detail = f"全域加點 +{pts}"
                 elif record_type == "event":
                     detail = f"活動({ev_code})加點 +{pts}"
                 elif record_type == "api":
                     detail = f"API加點 +{pts}"
+                elif record_type == "redeem":
+                    # 舊邏輯
+                    detail = f"兌換獎品 `{item.get('prize_name','?')}` {pts} 點"  # pts為負值
                 else:
-                    detail = f"其他加點 +{pts}"
+                    detail = f"其他加點/動作 {pts}"
+
                 all_records.append({"timestamp": stamp, "detail": detail})
 
             for ev_code, tstamp in joined_map.items():
@@ -279,6 +373,13 @@ class SelectionMenuSelect(discord.ui.Select):
 
             msg = "**以下為最近10筆時間戳記紀錄：**\n" + "\n".join(lines)
             await interaction.response.send_message(msg, ephemeral=True)
+
+        elif choice == "view_prize_list":
+            await interaction.response.send_message(
+                "請選擇要查看獎品的活動：",
+                view=ViewPrizeEventView(self.bot, self.user),
+                ephemeral=True
+            )
 
 class SelectionMenuView(View):
     def __init__(self, cog: CardBindingCog, user: discord.User):
